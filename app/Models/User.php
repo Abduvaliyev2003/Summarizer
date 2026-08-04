@@ -2,21 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -30,26 +23,20 @@ class User extends Authenticatable
         'subscription_ends_at',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+
+            // IMPORTANT
+            'pdf_count_reset_at' => 'datetime',
+            'subscription_ends_at' => 'datetime',
         ];
     }
 
@@ -58,13 +45,14 @@ class User extends Authenticatable
         parent::boot();
 
         static::creating(function ($user) {
-           if(!$user->plan_id) {
-              $basicPlan = Plan::where('slug', 'free')->first();
-              if ($basicPlan) {
-                  $user->plan_id = $basicPlan->id;
-                  $user->pdf_count = 0;
-                  $user->pdf_count_reset_at = now()->addDays(30);
-              }
+            if (!$user->plan_id) {
+                $freePlan = Plan::where('slug', 'free')->first();
+
+                if ($freePlan) {
+                    $user->plan_id = $freePlan->id;
+                    $user->pdf_count = 0;
+                    $user->pdf_count_reset_at = now()->addDays(30);
+                }
             }
         });
     }
@@ -79,51 +67,56 @@ class User extends Authenticatable
         return $this->hasMany(PdfSummary::class);
     }
 
-    public function canSummarizePdf(): boolval
+    public function canSummarizePdf(): bool
     {
-        if(!$this->plan) {
+        if (!$this->plan) {
             return false;
         }
 
-        if($this->pdf_count_reset_at && $this->pdf_count_reset_at->isPast()) {
-
+        if (
+            $this->pdf_count_reset_at &&
+            $this->pdf_count_reset_at->isPast()
+        ) {
             $this->update([
                 'pdf_count' => 0,
                 'pdf_count_reset_at' => now()->addDays(30),
             ]);
+
+            // Refresh model values after update
+            $this->refresh();
         }
 
-        if($this->plan->pdf_limit < 0) {
+        // -1 means unlimited
+        if ($this->plan->pdf_limit < 0) {
             return true;
         }
 
         return $this->pdf_count < $this->plan->pdf_limit;
     }
 
-    public function isAdmin (): boolval
+    public function isAdmin(): bool
     {
         return $this->role === 'admin';
     }
 
-    public function hasActiveSubscription(): boolval
+    public function hasActiveSubscription(): bool
     {
-        if(!$this->stripe_subscription_id) {
+        if (!$this->stripe_subscription_id) {
             return false;
         }
 
-        if($this->subscription_ends_at && $this->subscription_ends_at->isPast()) {
+        if (
+            $this->subscription_ends_at &&
+            $this->subscription_ends_at->isPast()
+        ) {
             return false;
         }
 
         return true;
     }
 
-    public function canChangePlan(): boolval
+    public function canChangePlan(): bool
     {
-        if(!$this->hasActiveSubscription()) {
-            return true;
-        }
-
-        return false;
+        return !$this->hasActiveSubscription();
     }
 }
