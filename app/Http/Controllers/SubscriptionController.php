@@ -21,15 +21,15 @@ class SubscriptionController extends Controller
         Log::info('createPaymentIntent', ['request' => $request->all()]);
         
         $request->validate([
-            'amount' => 'required|numeric|min:0',
             'plan_slug' => 'required|string',
         ]);
 
-        try{
+        try {
+            $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            $user  = $request->user();
+            $user = $request->user();
 
-            if (!$user->strip_customer_id)
+            if (!$user->stripe_customer_id)
             {
                 $customer = $stripe->customers->create([
                     'name' => $user->name,
@@ -39,14 +39,16 @@ class SubscriptionController extends Controller
                     ],
                 ]);
                 $user->update([
-                    'strip_customer_id' => $customer->id,
+                    'stripe_customer_id' => $customer->id,
                 ]);
             } else {
-                $customer = $stripe->customers->retrieve($user->strip_customer_id);
+                $customer = $stripe->customers->retrieve($user->stripe_customer_id);
             }
 
+            $amount = (int) round((float) ($request->input('amount') ?: $plan->price * 100));
+
             $paymentIntent = $stripe->paymentIntents->create([
-                'amount' => $request->amount,
+                'amount' => $amount,
                 'currency' => 'usd',
                 'customer' => $customer->id,
                 'payment_method_types' => ['card'],
@@ -81,7 +83,7 @@ class SubscriptionController extends Controller
         try {
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
             
-            if(!$user->strip_customer_id)
+            if(!$user->stripe_customer_id)
             {
                 $customer = $stripe->customers->create([
                     'name' => $user->name,
@@ -92,10 +94,10 @@ class SubscriptionController extends Controller
                     ],
                 ]);
                 $user->update([
-                    'strip_customer_id' => $customer->id,
+                    'stripe_customer_id' => $customer->id,
                 ]);
             } else {
-                $customer = $stripe->customers->retrieve($user->strip_customer_id);
+                $customer = $stripe->customers->retrieve($user->stripe_customer_id);
 
                 $stripe->customers->update($customer->id, [
                     'source' => $request->stripeToken,
@@ -132,8 +134,7 @@ class SubscriptionController extends Controller
                 'stripe_subscription_id' => $subscription->id,
                 'pdf_count' => 0,
                 'pdf_count_reset_at' => now()->addDays(30),
-                'subscribed_end_at' => now()->addMonths(),
-
+                'subscription_ends_at' => now()->addMonths(),
             ]);
             
             return redicrect()->route('dashboard')->with('success', 'You have successfully subscribed to the plan.');
@@ -209,7 +210,7 @@ class SubscriptionController extends Controller
                 'stripe_subscription_id' => $session->customer,
                 'pdf_count' => 0,
                 'pdf_count_reset_at' => now()->addDays(30),
-                'subscribed_end_at' => now()->addMonths(),
+                'subscription_ends_at' => now()->addMonths(),
             ]);
 
             return redirect()->route('dashboard')->with('success', 'You have successfully subscribed to the plan.');
@@ -237,7 +238,7 @@ class SubscriptionController extends Controller
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
             $stripe->subscriptions->cancel($user->stripe_subscription_id);
             $user->update([
-                'subscribed_end_at' => now()->addDays(30),
+                'subscription_ends_at' => now()->addDays(30),
                 
             ]);
             return back()->with('success', 'You have successfully canceled your subscription.');
@@ -286,7 +287,7 @@ class SubscriptionController extends Controller
                 'plan_id' => $newplan->id,
                 'pdf_count' => 0,
                 'pdf_count_reset_at' => now()->addDays(30),
-                'subscribed_end_at' => now()->addMonths(),
+                'subscription_ends_at' => now()->addMonths(),
             ]);
             return back()->with('success', 'You have successfully changed your plan.');
         } catch (\Exception $e) {
