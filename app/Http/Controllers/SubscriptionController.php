@@ -75,75 +75,58 @@ class SubscriptionController extends Controller
         $request->validate([
             'stripeToken' => 'required|string',
         ]);
-        $plan = Plan::where('slug', $slug)->where('is_active', true)->firstOrFail();
+        $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
         $user = $request->user();
 
-        Log::info('plan:', $plan->toArray());
-
         try {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            
-            if(!$user->stripe_customer_id)
-            {
-                $customer = $stripe->customers->create([
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'source' => $request->stripeToken,
-                    'metadata' => [
-                        'user_id' => $user->id,
-                    ],
-                ]);
-                $user->update([
-                    'stripe_customer_id' => $customer->id,
-                ]);
-            } else {
-                $customer = $stripe->customers->retrieve($user->stripe_customer_id);
-
-                $stripe->customers->update($customer->id, [
-                    'source' => $request->stripeToken,
-                ]);
-            }
-
-            $price  = $stripe->prices->create([
-                'currency' => 'usd',
-                'unit_amount' => $plan->price * 100,
-                'recurring' => [
-                    'interval' => 'month',
-                ],
-                'product_data' => [
-                    'name' => $plan->name,
-                    'description' => $plan->description,
-                ],
-            ]);
-            
-            $subscription = $stripe->subscriptions->create([
-                'customer' => $customer->id,
-                'items' => [
+            $sessionData = [
+                'payment_method_types' => ['card'],
+                'line_items' => [
                     [
-                        'price' => $price->id,
+                        'price_data' => [
+                            'currency' => 'usd',
+                            'unit_amount' => $plan->price * 100,
+                            'product_data' => [
+                                'name' => $plan->name,
+                                'description' => $plan->description,
+                            ],
+                            'recurring' => [
+                                'interval' => 'month',
+                            ],
+                        ],
+                        'quantity' => 1,
                     ],
                 ],
+                'mode' => 'subscription',
+                'success_url' => route('subscription.success') . '?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => route('checkout', ['plan_slug' => $plan->slug]),
                 'metadata' => [
-                    'user_id' => $user->id,
                     'plan_id' => $plan->id,
                 ],
-            ]);
-            
-            $user->update([
-                'plan_id' => $plan->id,
-                'stripe_subscription_id' => $subscription->id,
-                'pdf_count' => 0,
-                'pdf_count_reset_at' => now()->addDays(30),
-                'subscription_ends_at' => now()->addMonths(),
-            ]);
-            
-            return redicrect()->route('dashboard')->with('success', 'You have successfully subscribed to the plan.');
+            ];
 
-        } catch (\Stripe\Exception\CardException $e) {
-            Log::error('subscribe', ['error' => $e->getMessage()]);
-            return redirect()->back()->with('error', $e->getError()->message);
+            if ($user) {
+                $sessionData['customer_email'] = $user->email;
+                $sessionData['client_reference_id'] = $user->id;
+                $sessionData['metadata']['user_id'] = $user->id;
+            }
+
+            $session = Session::create($sessionData);
+
+            Log::info('createCheckoutSession', ['sessionId' => $session->id, 'url' => $session->url]);
+
+            if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
+                return response()->json(['url' => $session->url]);
+            }
+
+            return Inertia::location($session->url);
         } catch (\Exception $e) {
-            Log::error('subscribe', ['error' => $e->getMessage()]);
+            Log::error('createCheckoutSession', ['error' => $e->getMessage()]);
+
+            if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
+
             return redirect()->back()->with('error', $e->getMessage());
         }
     }
@@ -174,15 +157,18 @@ class SubscriptionController extends Controller
                     ],
                 ],
                 'mode' => 'subscription',
-                'success_url' => route('checkout.success') . '?session_id={CHECKOUT_SESSION_ID}',
+                'success_url' => route('subscription.success') . '?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => route('checkout', ['plan_slug' => $plan->slug]),
-                'customer_email' => $user->email,
                 'client_reference_id' => $user->id,
                 'metadata' => [
                     'user_id' => $user->id,
                     'plan_id' => $plan->id,
                 ],
             ]);
+            if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
+                return response()->json(['url' => $session->url]);
+            }
+
             return Inertia::location($session->url);
         
         } catch (\Exception $e) {

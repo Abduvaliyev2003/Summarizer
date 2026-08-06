@@ -1,13 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { loadStripe, type Stripe as StripeInstance, type Appearance } from '@stripe/stripe-js';
-import {
-    Elements,
-    PaymentElement,
-    LinkAuthenticationElement,
-    useStripe,
-    useElements,
-} from '@stripe/react-stripe-js';
 import {
     Check,
     Sparkles,
@@ -106,17 +98,6 @@ function getCsrfToken(): string {
     return cookieToken ? decodeURIComponent(cookieToken) : '';
 }
 
-function prefersDarkMode(): boolean {
-    if (typeof document === 'undefined') return false;
-    return (
-        document.documentElement.classList.contains('dark') ||
-        window.matchMedia?.('(prefers-color-scheme: dark)').matches
-    );
-}
-
-function looksLikeSecretKey(key: string): boolean {
-    return key.startsWith('sk_') || key.startsWith('rk_');
-}
 
 /* -------------------------------------------------------------------------- */
 /*  Small reusable pieces                                                      */
@@ -209,65 +190,69 @@ function FaqAccordionItem({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Embedded Stripe payment form                                              */
-/*  Renders inside <Elements>, so it can use useStripe / useElements.         */
+/*  Hosted Stripe Checkout button                                             */
 /* -------------------------------------------------------------------------- */
 
-function StripePaymentForm({ plan, formattedPrice }: { plan: Plan; formattedPrice: string }) {
-    const stripe = useStripe();
-    const elements = useElements();
-
+function HostedCheckoutButton({ plan, formattedPrice, userEmail, userName }: { plan: Plan; formattedPrice: string; userEmail?: string; userName?: string }) {
     const [processing, setProcessing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [elementsReady, setElementsReady] = useState(false);
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!stripe || !elements || processing) return;
+        if (processing) return;
 
         setProcessing(true);
         setErrorMessage(null);
 
-        const { error: submitError } = await elements.submit();
-        if (submitError) {
-            setErrorMessage(submitError.message ?? 'Please check your payment details and try again.');
-            setProcessing(false);
-            return;
-        }
+        try {
+            const csrfToken = getCsrfToken();
+            const response = await fetch(`/subcription/create-checkout-session/${plan.slug}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken
+                        ? {
+                              'X-CSRF-TOKEN': csrfToken,
+                              'X-XSRF-TOKEN': csrfToken,
+                          }
+                        : {}),
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({}),
+            });
 
-        const { error } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-                return_url: `${window.location.origin}/subcription/success`,
-            },
-        });
+            const data = await response.json().catch(() => null);
 
-        // confirmPayment only returns if there's an immediate error —
-        // on success the browser is redirected to return_url.
-        if (error) {
-            setErrorMessage(
-                error.type === 'card_error' || error.type === 'validation_error'
-                    ? error.message ?? 'Your card was declined. Please try a different payment method.'
-                    : 'Something went wrong while processing your payment. Please try again.',
-            );
+            if (response.ok && data?.url) {
+                window.location.href = data.url;
+                return;
+            }
+
+            throw new Error(data?.error || 'Unable to start checkout. Please try again.');
+        } catch (err) {
+            setErrorMessage(err instanceof Error ? err.message : 'Unable to start checkout. Please try again.');
             setProcessing(false);
         }
     };
 
     return (
         <form onSubmit={handleSubmit} noValidate>
-            <div className="space-y-4">
-                <LinkAuthenticationElement
-                    id="link-authentication-element"
-                    onReady={() => setElementsReady(true)}
-                />
-                <PaymentElement
-                    id="payment-element"
-                    options={{
-                        layout: 'tabs',
-                        fields: { billingDetails: { name: 'auto' } },
-                    }}
-                />
+            <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-white/5">
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                    <p className="font-medium text-slate-900 dark:text-white">Secure hosted checkout</p>
+                    <p className="mt-2">You will be redirected to Stripe to complete your subscription for the {plan.name} plan.</p>
+                    {userEmail && (
+                        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                            <span className="font-semibold">Email:</span> {userEmail}
+                        </p>
+                    )}
+                    {userName && (
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            <span className="font-semibold">Name:</span> {userName}</p>
+                    )}
+                </div>
             </div>
 
             {errorMessage && (
@@ -282,21 +267,21 @@ function StripePaymentForm({ plan, formattedPrice }: { plan: Plan; formattedPric
 
             <button
                 type="submit"
-                disabled={!stripe || !elements || !elementsReady || processing}
+                disabled={processing}
                 aria-busy={processing}
-                aria-label={`Pay ${formattedPrice} and subscribe to the ${plan.name} plan`}
+                aria-label={`Subscribe and pay ${formattedPrice}`}
                 className="group relative mt-6 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:scale-100"
             >
                 <span className="pointer-events-none absolute inset-0 -translate-x-full bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
                 {processing ? (
                     <>
                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        Processing payment&hellip;
+                        Redirecting to Stripe&hellip;
                     </>
                 ) : (
                     <>
                         <Lock className="h-4 w-4" aria-hidden="true" />
-                        Pay {formattedPrice} securely
+                        Subscribe for {formattedPrice}
                     </>
                 )}
             </button>
@@ -310,145 +295,9 @@ function StripePaymentForm({ plan, formattedPrice }: { plan: Plan; formattedPric
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Payment intent loader — fetches the client secret, then mounts Elements   */
-/* -------------------------------------------------------------------------- */
-
-function PaymentPanel({
-    plan,
-    stripeKey,
-    formattedPrice,
-}: {
-    plan: Plan;
-    stripeKey: string;
-    formattedPrice: string;
-}) {
-    const stripePromise = useMemo<Promise<StripeInstance | null>>(() => {
-        if (!stripeKey || looksLikeSecretKey(stripeKey)) {
-            return Promise.resolve(null);
-        }
-
-        return loadStripe(stripeKey);
-    }, [stripeKey]);
-
-    const [clientSecret, setClientSecret] = useState<string | null>(null);
-    const [loadError, setLoadError] = useState<string | null>(null);
-    const [attempt, setAttempt] = useState(0);
-
-    useEffect(() => {
-        let cancelled = false;
-        setClientSecret(null);
-        setLoadError(null);
-
-        async function fetchIntent() {
-            try {
-                const csrfToken = getCsrfToken();
-
-                const response = await fetch('/subcription/create-payment-intent', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfToken
-                            ? {
-                                  'X-CSRF-TOKEN': csrfToken,
-                                  'X-XSRF-TOKEN': csrfToken,
-                              }
-                            : {}),
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        plan_slug: plan.slug,
-                        amount: Math.round(plan.price * 100),
-                    }),
-                });
-
-                const data = await response.json().catch(() => null);
-
-                if (!response.ok || !data?.clientSecret) {
-                    throw new Error(data?.message ?? 'Unable to start checkout. Please try again.');
-                }
-
-                if (!cancelled) {
-                    setClientSecret(data.clientSecret as string);
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    setLoadError(err instanceof Error ? err.message : 'Unable to start checkout.');
-                }
-            }
-        }
-
-        fetchIntent();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [plan.slug, attempt]);
-
-    const appearance: Appearance = useMemo(() => {
-        const dark = prefersDarkMode();
-        return {
-            theme: dark ? 'night' : 'stripe',
-            variables: {
-                colorPrimary: '#7c3aed',
-                colorBackground: dark ? '#0f172a' : '#ffffff',
-                colorText: dark ? '#e2e8f0' : '#0f172a',
-                colorTextSecondary: dark ? '#94a3b8' : '#475569',
-                colorDanger: '#e11d48',
-                fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
-                borderRadius: '12px',
-                spacingUnit: '4px',
-            },
-        };
-    }, []);
-
-    if (loadError || !stripeKey || looksLikeSecretKey(stripeKey)) {
-        const message = looksLikeSecretKey(stripeKey)
-            ? 'Stripe is configured with a secret key. Please set a publishable key (pk_...) for the checkout page.'
-            : loadError ?? 'Unable to start checkout. Please try again.';
-
-        return (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-500/20 dark:bg-rose-500/10">
-                <AlertCircle className="mx-auto h-6 w-6 text-rose-500" aria-hidden="true" />
-                <p className="mt-3 text-sm font-medium text-rose-600 dark:text-rose-400">{message}</p>
-                <button
-                    type="button"
-                    onClick={() => setAttempt((n) => n + 1)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 py-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 outline-none dark:border-rose-500/30 dark:bg-transparent dark:text-rose-400 dark:hover:bg-rose-500/10"
-                >
-                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                    Try again
-                </button>
-            </div>
-        );
-    }
-
-    if (!clientSecret) {
-        return (
-            <div className="space-y-3" aria-busy="true" aria-label="Preparing secure payment form">
-                <div className="h-11 animate-pulse rounded-xl bg-violet-100 dark:bg-white/10" />
-                <div className="h-11 animate-pulse rounded-xl bg-violet-100 dark:bg-white/10" />
-                <div className="h-32 animate-pulse rounded-xl bg-violet-100 dark:bg-white/10" />
-                <div className="h-12 animate-pulse rounded-xl bg-violet-200 dark:bg-white/10" />
-                <p className="flex items-center justify-center gap-2 pt-1 text-xs text-slate-500 dark:text-slate-400">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    Preparing secure payment form&hellip;
-                </p>
-            </div>
-        );
-    }
-
-    return (
-        <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
-            <StripePaymentForm plan={plan} formattedPrice={formattedPrice} />
-        </Elements>
-    );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Page                                                                      */
 /* -------------------------------------------------------------------------- */
+
 
 export default function Checkout({ plan, stripeKey, auth }: Props) {
     const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
@@ -766,12 +615,13 @@ export default function Checkout({ plan, stripeKey, auth }: Props) {
                                             </div>
                                         </dl>
 
-                                        {/* Embedded Stripe payment form (Link, card, etc.) */}
+                                        {/* Hosted Stripe Checkout button */}
                                         <div className="mt-7 border-t border-violet-100 pt-7 dark:border-white/10">
-                                            <PaymentPanel
+                                            <HostedCheckoutButton
                                                 plan={safePlan}
-                                                stripeKey={stripeKey}
                                                 formattedPrice={formattedPrice}
+                                                userEmail={auth?.user?.email}
+                                                userName={auth?.user?.name}
                                             />
                                         </div>
 
