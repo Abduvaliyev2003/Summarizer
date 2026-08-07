@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SubscriptionController;
 use App\Models\Plan;
 use Illuminate\Support\Facades\Route;
@@ -83,11 +84,11 @@ Route::get('/billing', function () {
 
 Route::get('/history', function () {
     $user = auth()->user();
+    $summaries = $user->pdfSummaries()->latest()->paginate(10);
+
 
     return Inertia::render('history', [
-        'auth' => [
-            'user' => $user,
-        ],
+        'summaries' => $summaries,
     ]);
 })->middleware('auth')->name('history');
 
@@ -98,6 +99,9 @@ Route::post('/subscription/create-checkout-session/{plan_slug}', [SubscriptionCo
 Route::get('/subscription/success', [SubscriptionController::class, 'success'])->name('subscription.success');
 Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
 Route::post('/subscription/change-plan', [SubscriptionController::class, 'changePlan'])->name('subscription.change-plan');
+
+Route::get('/admin/users', [AdminController::class, 'users'])->middleware('auth')->name('admin.users');
+Route::post('/admin/users/{user}/plan', [AdminController::class, 'updateUserPlan'])->middleware('auth')->name('admin.update-user-plan');
 
 
 require __DIR__.'/settings.php';
