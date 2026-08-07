@@ -32,6 +32,9 @@ return [
         'key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_PUBLIC_KEY', env('STRIPE_KEY'))),
         'secret' => env('STRIPE_SECRET'),
     ],
+    'openrouter' => [
+        'key' => env('OPENROUTER_API_KEY'),
+    ],
 
     'slack' => [
         'notifications' => [

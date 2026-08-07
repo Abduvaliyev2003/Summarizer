@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\PDFSummarizeController;
 use App\Http\Controllers\SubscriptionController;
 use App\Models\Plan;
 use Illuminate\Support\Facades\Route;
@@ -103,6 +104,8 @@ Route::post('/subscription/change-plan', [SubscriptionController::class, 'change
 Route::get('/admin/users', [AdminController::class, 'users'])->middleware('auth')->name('admin.users');
 Route::post('/admin/users/{user}/plan', [AdminController::class, 'updateUserPlan'])->middleware('auth')->name('admin.update-user-plan');
 
+
+Route::post('/pdf/summarize', [PDFSummarizeController::class, 'summarize'])->name('pdf.summarize');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

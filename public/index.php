@@ -4,6 +4,12 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
+// Increase file upload limits for PDF summarization.
+@ini_set('upload_max_filesize', '20M');
+@ini_set('post_max_size', '20M');
+@ini_set('max_input_time', '300');
+@ini_set('max_execution_time', '300');
+
 // Determine if the application is in maintenance mode...
 if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
     require $maintenance;
