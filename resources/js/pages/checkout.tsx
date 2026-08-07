@@ -206,7 +206,7 @@ function HostedCheckoutButton({ plan, formattedPrice, userEmail, userName }: { p
 
         try {
             const csrfToken = getCsrfToken();
-            const response = await fetch(`/subcription/create-checkout-session/${plan.slug}`, {
+            const response = await fetch(`/subscription/create-checkout-session/${plan.slug}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
