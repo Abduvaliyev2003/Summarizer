@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PdfSummary;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -9,11 +10,11 @@ use Smalot\PdfParser\Parser;
 
 class PDFSummarizeController extends Controller
 {
-     public function summarize(Request $request)
-     {
+    public function summarize(Request $request)
+    {
         $file = $request->file('pdf');
 
-        if (!$file || !$file->isValid()) {
+        if (! $file || ! $file->isValid()) {
             $errorCode = $file?->getError() ?? ($_FILES['pdf']['error'] ?? null);
             $message = 'The PDF failed to upload. Please try again.';
 
@@ -35,7 +36,7 @@ class PDFSummarizeController extends Controller
         ]);
 
         $user = auth()->user();
-        if(!$user->canSummarizePdf()) {
+        if (! $user->canSummarizePdf()) {
             return response()->json([
                 'message' => 'You have reached your PDF limit for this month. Please upgrade your plan to continue using our service.',
             ], 403);
@@ -46,7 +47,7 @@ class PDFSummarizeController extends Controller
             $path = $file->store('pdfs');
             $originalName = $file->getClientOriginalName();
 
-            $parser = new Parser();
+            $parser = new Parser;
             $pdf = $parser->parseFile(Storage::path($path));
             $text = trim($pdf->getText());
 
@@ -54,15 +55,17 @@ class PDFSummarizeController extends Controller
 
             if ($text === '') {
                 Storage::delete($path);
+
                 return response()->json([
                     'message' => 'Unable to extract text from the PDF file.',
                 ], 422);
             }
 
-            $apiKey  = config('services.openrouter.key');
-            if(empty($apiKey)) {
+            $apiKey = config('services.openrouter.key');
+            if (empty($apiKey)) {
                 \Log::error('OpenRouter API Key is not set.');
                 Storage::delete($path);
+
                 return response()->json([
                     'message' => 'OpenRouter API Key is not set.',
                 ], 500);
@@ -80,48 +83,50 @@ class PDFSummarizeController extends Controller
             $userPrompt = $prompts[$summaryType] ?? $prompts['default'];
 
             $response = Http::timeout(60)
-            ->withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post('https://openrouter.ai/api/v1/chat/completions', [
-                'model' => 'openai/gpt-4o-mini',
-                'messages' => [
-                    [ 
-                        'role' => 'system',
-                        'content' => 'You are a professional PDF summarizer. Provide clear, well-formatted summaries without using markdown formatting, asterisks, or special characters. Use plain text with proper paragraphs.',
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://openrouter.ai/api/v1/chat/completions', [
+                    'model' => 'openai/gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => 'You are a professional PDF summarizer. Provide clear, well-formatted summaries without using markdown formatting, asterisks, or special characters. Use plain text with proper paragraphs.',
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => "{$userPrompt}:\n\n{$text}",
+                        ],
                     ],
-                    [
-                        'role' => 'user',
-                        'content' => "{$userPrompt}:\n\n{$text}",
-                    ],
-                ],
-            ]);
+                ]);
 
-            if (!$response->ok()) {
+            if (! $response->ok()) {
                 $errorBody = $response->body();
                 $statusCode = $response->status();
 
-                \Log::error("OpenRouter API error", [
+                \Log::error('OpenRouter API error', [
                     'status' => $statusCode,
                     'body' => $errorBody,
                 ]);
 
                 Storage::delete($path);
-                
+
                 $errorData = $response->json();
                 $errorMessage = $errorData['error']['message'] ?? 'Failed to generate summary. Please try again later.';
-                return  response()->json([
+
+                return response()->json([
                     'message' => $errorMessage,
                 ], $statusCode >= 500 ? 502 : 422);
             }
             $data = $response->json();
 
-            if (!isset($data['choices'][0]['message']['content'])) {
-                \Log::error("OpenRouter API response missing content", [
+            if (! isset($data['choices'][0]['message']['content'])) {
+                \Log::error('OpenRouter API response missing content', [
                     'response' => $data,
                 ]);
                 Storage::delete($path);
+
                 return response()->json([
                     'message' => 'Unable to generate summary. Please try again later.',
                 ], 500);
@@ -129,31 +134,32 @@ class PDFSummarizeController extends Controller
 
             $summaryText = $data['choices'][0]['message']['content'];
 
-            $pdfSummary = \App\Models\PdfSummary::create([
+            $pdfSummary = PdfSummary::create([
                 'user_id' => $user->id,
                 'filename' => $originalName,
                 'summary' => $summaryText,
                 'file_size' => $file->getSize(),
             ]);
 
+            $user->increment('pdf_count');
+
             return response()->json([
                 'summary' => $summaryText,
                 'id' => $pdfSummary->id,
+                'pdfCount' => $user->fresh()->pdf_count,
             ]);
 
-           
         } catch (\Exception $e) {
             \Log::error('Failed to generate summary', [
                 'trace' => $e->getTraceAsString(),
             ]);
-            if (isset($path))
-            {
+            if (isset($path)) {
                 Storage::delete($path);
             }
-            
+
             return response()->json([
                 'message' => 'Failed to generate summary. Please try again later.',
             ], 500);
         }
-     }
+    }
 }

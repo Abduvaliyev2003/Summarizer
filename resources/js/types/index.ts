@@ -36,5 +36,16 @@ export interface User {
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
-    [key: string]: unknown; // This allows for additional properties...
+    role?: string;
+    pdf_count?: number;
+    stripe_subscription_id?: string | null;
+    subscription_ends_at?: string | null;
+    plan?: {
+        id: number;
+        name: string;
+        slug: string;
+        price: number;
+        pdf_limit: number;
+    } | null;
+    [key: string]: unknown;
 }

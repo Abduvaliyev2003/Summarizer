@@ -293,7 +293,7 @@ export default function History({ summaries }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="History" />
+            <Head title="History - PDF Summarizer" />
 
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-6">
                 <div className="flex flex-wrap items-end justify-between gap-4">

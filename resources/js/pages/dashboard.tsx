@@ -4,7 +4,9 @@ import { Head, Link } from '@inertiajs/react';
 import {
     AlertCircle,
     ArrowUpRight,
+    Calendar,
     CheckCircle2,
+    Clock,
     CreditCard,
     FileText,
     History as HistoryIcon,
@@ -13,6 +15,7 @@ import {
     Upload,
     Users,
     X,
+    Zap,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
@@ -39,6 +42,13 @@ interface UserStats {
     totalSummaries: number;
 }
 
+interface RecentSummary {
+    id: number;
+    filename: string;
+    summary: string;
+    created_at: string;
+}
+
 interface AdminPlanBreakdown {
     id: number;
     name: string;
@@ -57,6 +67,7 @@ interface AdminStats {
 interface Props {
     user: User;
     userStats?: UserStats;
+    recentSummaries?: RecentSummary[];
     adminStats?: AdminStats;
     flash?: {
         success?: string;
@@ -72,7 +83,181 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
-/*  Reusable pieces                                                          */
+/*  Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Circular Progress Ring                                                     */
+/* -------------------------------------------------------------------------- */
+
+function CircularProgress({
+    percent,
+    used,
+    limit,
+    planName,
+    isNearLimit,
+    isUnlimited,
+}: {
+    percent: number;
+    used: number;
+    limit: number;
+    planName: string;
+    isNearLimit: boolean;
+    isUnlimited: boolean;
+}) {
+    const size = 160;
+    const strokeWidth = 12;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percent / 100) * circumference;
+
+    const ringColor = isUnlimited
+        ? 'url(#ringGradientUnlimited)'
+        : isNearLimit
+          ? 'url(#ringGradientAmber)'
+          : 'url(#ringGradientViolet)';
+
+    return (
+        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+            {/* SVG Ring */}
+            <div className="relative flex-none" style={{ width: size, height: size }}>
+                <svg width={size} height={size} className="-rotate-90">
+                    <defs>
+                        <linearGradient id="ringGradientViolet" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#7c3aed" />
+                            <stop offset="50%" stopColor="#9333ea" />
+                            <stop offset="100%" stopColor="#4f46e5" />
+                        </linearGradient>
+                        <linearGradient id="ringGradientAmber" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#f59e0b" />
+                            <stop offset="100%" stopColor="#ef4444" />
+                        </linearGradient>
+                        <linearGradient id="ringGradientUnlimited" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#10b981" />
+                            <stop offset="100%" stopColor="#059669" />
+                        </linearGradient>
+                    </defs>
+                    {/* Track */}
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="none"
+                        strokeWidth={strokeWidth}
+                        className="stroke-violet-100 dark:stroke-white/10"
+                    />
+                    {/* Progress */}
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="none"
+                        stroke={ringColor}
+                        strokeWidth={strokeWidth}
+                        strokeLinecap="round"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={isUnlimited ? 0 : offset}
+                        style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
+                    />
+                </svg>
+
+                {/* Center label */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    {isUnlimited ? (
+                        <Zap className="h-8 w-8 text-emerald-500" aria-hidden="true" />
+                    ) : (
+                        <>
+                            <span
+                                className={`text-3xl font-extrabold leading-none ${
+                                    isNearLimit
+                                        ? 'text-amber-500'
+                                        : 'bg-gradient-to-br from-violet-600 to-indigo-600 bg-clip-text text-transparent'
+                                }`}
+                            >
+                                {percent}%
+                            </span>
+                            <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                used
+                            </span>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Text details */}
+            <div className="flex flex-col gap-2">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                        Monthly usage
+                    </p>
+                    <p className="mt-1 text-3xl font-extrabold text-slate-900 dark:text-white">
+                        {isUnlimited ? (
+                            <span className="text-emerald-500">Unlimited</span>
+                        ) : (
+                            <>
+                                <span
+                                    className={
+                                        isNearLimit
+                                            ? 'text-amber-500'
+                                            : 'bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent'
+                                    }
+                                >
+                                    {used}
+                                </span>
+                                <span className="text-xl font-semibold text-slate-400 dark:text-slate-500">
+                                    {' '}
+                                    / {limit}
+                                </span>
+                            </>
+                        )}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {isUnlimited
+                            ? 'No limits on your plan'
+                            : `${Math.max(0, limit - used)} documents remaining this month`}
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                            isUnlimited
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                : isNearLimit
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                  : 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                        }`}
+                    >
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                        {planName}
+                    </span>
+
+                    {isNearLimit && !isUnlimited && (
+                        <Link
+                            href="/billing"
+                            className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-violet-600/20 transition-all duration-300 hover:scale-[1.03] hover:shadow-md hover:shadow-violet-600/30"
+                        >
+                            Upgrade
+                            <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                        </Link>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Reusable pieces                                                            */
 /* -------------------------------------------------------------------------- */
 
 function StatCard({
@@ -181,36 +366,37 @@ function FlashToast({ flash, onDismiss }: { flash: { success?: string; error?: s
 /*  Page                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export default function Dashboard({ user, userStats, adminStats, flash }: Props) {
+export default function Dashboard({ user, userStats, recentSummaries, adminStats, flash }: Props) {
     const [dismissed, setDismissed] = useState(false);
     const isAdmin = user.role === 'admin';
 
-    const usagePercent =
-        userStats && userStats.pdfLimit > 0
-            ? Math.min(100, Math.round((userStats.pdfCount / userStats.pdfLimit) * 100))
-            : 0;
-    const isNearLimit = usagePercent >= 80;
+    // Normalised stats — always defined so UI never hides behind undefined checks
+    const pdfCount = userStats?.pdfCount ?? 0;
+    const pdfLimit = userStats?.pdfLimit ?? 0;
+    const planName = userStats?.planName ?? 'No Plan';
+    const totalSummaries = userStats?.totalSummaries ?? 0;
 
-    const totalMonthlyRevenue = adminStats?.plans?.reduce(
-        (sum, plan) => sum + plan.price * plan.users_count,
-        0,
-    ) ?? 0;
+    const isUnlimited = pdfLimit < 0;
+    const usagePercent =
+        isUnlimited || pdfLimit === 0 ? 0 : Math.min(100, Math.round((pdfCount / pdfLimit) * 100));
+    const isNearLimit = usagePercent >= 80 && !isUnlimited;
+
+    const totalMonthlyRevenue =
+        adminStats?.plans?.reduce((sum, plan) => sum + plan.price * plan.users_count, 0) ?? 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dashboard" />
+            <Head title="Dashboard - PDF Summarizer" />
 
             {flash && !dismissed && (flash.success || flash.error) && (
                 <FlashToast flash={flash} onDismiss={() => setDismissed(true)} />
             )}
 
             <div className="flex h-full flex-1 flex-col gap-8 overflow-x-auto p-6">
-                {/* -------------------------------------------------------------- */}
-                {/* Header                                                          */}
-                {/* -------------------------------------------------------------- */}
+                {/* Header */}
                 <div>
                     <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        {isAdmin ? 'Admin overview' : `Welcome back, ${user.name.split(' ')[0]}`}
+                        {isAdmin ? 'Admin overview' : `Welcome back, ${user.name.split(' ')[0]} 👋`}
                     </h1>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         {isAdmin
@@ -221,9 +407,7 @@ export default function Dashboard({ user, userStats, adminStats, flash }: Props)
 
                 {isAdmin ? (
                     <>
-                        {/* ---------------------------------------------------------- */}
-                        {/* Admin stat cards                                            */}
-                        {/* ---------------------------------------------------------- */}
+                        {/* Admin stat cards */}
                         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                             <StatCard
                                 icon={Users}
@@ -255,9 +439,7 @@ export default function Dashboard({ user, userStats, adminStats, flash }: Props)
                             />
                         </div>
 
-                        {/* ---------------------------------------------------------- */}
-                        {/* Plans breakdown                                             */}
-                        {/* ---------------------------------------------------------- */}
+                        {/* Plans breakdown */}
                         <div className="rounded-3xl border border-violet-100 bg-white/80 p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -265,7 +447,7 @@ export default function Dashboard({ user, userStats, adminStats, flash }: Props)
                                 </h2>
                                 <Link
                                     href="/admin/users"
-                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 outline-none transition-colors hover:text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 rounded-md dark:text-violet-400"
+                                    className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-violet-600 outline-none transition-colors hover:text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:text-violet-400"
                                 >
                                     Manage users
                                     <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -320,93 +502,49 @@ export default function Dashboard({ user, userStats, adminStats, flash }: Props)
                 ) : (
                     <>
                         {/* ---------------------------------------------------------- */}
-                        {/* User stat cards                                             */}
+                        {/* USAGE HERO CARD — always visible, circular ring              */}
                         {/* ---------------------------------------------------------- */}
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                            <StatCard
-                                icon={CreditCard}
-                                label="Current plan"
-                                value={userStats?.planName ?? 'No plan'}
-                                accent="violet"
+                        <div
+                            className={`relative overflow-hidden rounded-3xl border p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 ${
+                                isNearLimit
+                                    ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
+                                    : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
+                            }`}
+                        >
+                            {/* decorative glow */}
+                            <div
+                                className="pointer-events-none absolute -top-12 -right-12 h-48 w-48 rounded-full bg-gradient-to-br from-violet-400/20 via-purple-400/10 to-transparent blur-2xl dark:from-violet-600/15"
+                                aria-hidden="true"
                             />
+
+                            <CircularProgress
+                                percent={isUnlimited ? 100 : usagePercent}
+                                used={pdfCount}
+                                limit={pdfLimit}
+                                planName={planName}
+                                isNearLimit={isNearLimit}
+                                isUnlimited={isUnlimited}
+                            />
+                        </div>
+
+                        {/* User stat cards */}
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <StatCard
                                 icon={FileText}
                                 label="Total summaries"
-                                value={userStats?.totalSummaries ?? 0}
+                                value={totalSummaries}
                                 accent="indigo"
                             />
                             <StatCard
                                 icon={TrendingUp}
                                 label="Documents remaining"
-                                value={
-                                    userStats
-                                        ? Math.max(0, userStats.pdfLimit - userStats.pdfCount)
-                                        : 0
-                                }
-                                hint={userStats ? `${userStats.pdfCount} of ${userStats.pdfLimit} used` : undefined}
+                                value={isUnlimited ? '∞' : Math.max(0, pdfLimit - pdfCount)}
+                                hint={isUnlimited ? 'Unlimited plan — no monthly cap' : `${pdfCount} of ${pdfLimit} used this month`}
                                 accent={isNearLimit ? 'amber' : 'emerald'}
                             />
                         </div>
 
-                        {/* ---------------------------------------------------------- */}
-                        {/* Usage card                                                  */}
-                        {/* ---------------------------------------------------------- */}
-                        <div className="rounded-3xl border border-violet-100 bg-white/80 p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-                            <div className="flex flex-wrap items-center justify-between gap-4">
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-violet-600/20">
-                                        <Sparkles className="h-3 w-3" aria-hidden="true" />
-                                        {userStats?.planName ?? 'No plan'}
-                                    </span>
-                                    {isNearLimit && (
-                                        <span className="text-xs font-medium text-amber-500">
-                                            You&apos;re close to your monthly limit
-                                        </span>
-                                    )}
-                                </div>
-                                {isNearLimit && (
-                                    <Link
-                                        href="/"
-                                        className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none"
-                                    >
-                                        Upgrade plan
-                                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-                                    </Link>
-                                )}
-                            </div>
-
-                            {userStats && (
-                                <div className="mt-6">
-                                    <div className="mb-2 flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
-                                        <span>Monthly usage</span>
-                                        <span className="font-medium">
-                                            {userStats.pdfCount} / {userStats.pdfLimit} documents
-                                        </span>
-                                    </div>
-                                    <div
-                                        className="h-2 w-full overflow-hidden rounded-full bg-violet-100 dark:bg-white/10"
-                                        role="progressbar"
-                                        aria-valuenow={usagePercent}
-                                        aria-valuemin={0}
-                                        aria-valuemax={100}
-                                        aria-label="Monthly document usage"
-                                    >
-                                        <div
-                                            className={`h-full rounded-full transition-all duration-500 ${
-                                                isNearLimit
-                                                    ? 'bg-gradient-to-r from-amber-500 to-rose-500'
-                                                    : 'bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600'
-                                            }`}
-                                            style={{ width: `${usagePercent}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* ---------------------------------------------------------- */}
-                        {/* Quick actions                                               */}
-                        {/* ---------------------------------------------------------- */}
+                        {/* Quick actions */}
                         <div>
                             <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
                                 Quick actions
@@ -431,6 +569,80 @@ export default function Dashboard({ user, userStats, adminStats, flash }: Props)
                                     href="/billing"
                                 />
                             </div>
+                        </div>
+
+                        {/* Recent Summaries Widget */}
+                        <div className="rounded-3xl border border-violet-100 bg-white/80 p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+                                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                        Recent Summaries
+                                    </h2>
+                                </div>
+                                <Link
+                                    href="/history"
+                                    className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-violet-600 outline-none transition-colors hover:text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:text-violet-400"
+                                >
+                                    View all
+                                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                                </Link>
+                            </div>
+
+                            {!recentSummaries || recentSummaries.length === 0 ? (
+                                <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-8 text-center dark:border-white/10">
+                                    <FileText className="h-8 w-8 text-slate-400 dark:text-slate-600" aria-hidden="true" />
+                                    <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                                        No recent summaries
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                                        Upload your first PDF to generate a summary.
+                                    </p>
+                                    <Link
+                                        href="/"
+                                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-600/20 transition-all hover:bg-violet-700"
+                                    >
+                                        <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Summarize PDF
+                                    </Link>
+                                </div>
+                            ) : (
+                                <div className="mt-6 space-y-3">
+                                    {recentSummaries.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="group flex flex-col justify-between gap-3 rounded-2xl border border-violet-100 bg-white/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-200 hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:hover:border-violet-500/30 sm:flex-row sm:items-center"
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                                                    <FileText className="h-5 w-5" aria-hidden="true" />
+                                                </span>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                        {item.filename}
+                                                    </p>
+                                                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                                                        {item.summary}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-none items-center gap-3">
+                                                <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                                                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    {formatDate(item.created_at)}
+                                                </span>
+                                                <Link
+                                                    href="/history"
+                                                    className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-xs font-semibold text-violet-600 transition-colors hover:bg-violet-50 dark:border-white/10 dark:bg-white/5 dark:text-violet-400 dark:hover:bg-white/10"
+                                                >
+                                                    Read
+                                                    <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </>
                 )}

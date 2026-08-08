@@ -46,6 +46,11 @@ export function AppSidebar() {
             icon: LayoutGrid,
         },
         {
+            title: 'Summarize',
+            url: '/',
+            icon: FileText,
+        },
+        {
             title: 'History',
             url: '/history',
             icon: History,
@@ -112,7 +117,7 @@ export function AppSidebar() {
     };
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
+        <Sidebar collapsible="icon" variant="inset" className="border-r border-violet-100/80 bg-white/75 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
