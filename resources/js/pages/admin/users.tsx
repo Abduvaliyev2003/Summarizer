@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Pagination } from '@/components/ui/pagination';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatCard } from '@/components/ui/stat-card';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { formatDate, formatPrice } from '@/lib/format';
+import { BreadcrumbItem, PaginatedResponse, Plan, User } from '@/types';
+import { Head, router } from '@inertiajs/react';
 import {
     Calendar,
-    ChevronLeft,
-    ChevronRight,
     CreditCard,
     FileText,
     Loader2,
@@ -13,6 +14,7 @@ import {
     ShieldCheck,
     Users,
 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -25,84 +27,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface Plan {
-    id: number;
-    name: string;
-    slug: string;
-    description: string;
-    price: number;
-    pdf_limit: number;
-    features: string[] | string;
-    is_active: boolean;
-}
-
-interface User {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-    plan?: Plan;
-    pdf_count: number;
-    pdf_summaries_count: number;
-    created_at: string;
-}
-
 interface Props {
-    users: {
-        data: User[];
-        current_page: number;
-        last_page: number;
-        total: number;
-        per_page: number;
-    };
+    users: PaginatedResponse<User>;
     plans?: Plan[];
     stats?: {
         totalUsers: number;
         activeSubscriptions: number;
         totalPdfsProcessed: number;
     };
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
-}
-
-function formatPrice(price: number): string {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Small reusable pieces                                                      */
-/* -------------------------------------------------------------------------- */
-
-function StatCard({
-    icon: Icon,
-    label,
-    value,
-}: {
-    icon: typeof Users;
-    label: string;
-    value: number;
-}) {
-    return (
-        <div className="flex items-center gap-4 rounded-3xl border border-violet-100 bg-white/80 p-6 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-violet-900/10 dark:border-white/10 dark:bg-white/5">
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                <Icon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
-                <p className="mt-0.5 text-2xl font-extrabold text-slate-900 dark:text-white">{value}</p>
-            </div>
-        </div>
-    );
 }
 
 function PlanCell({
@@ -134,7 +66,7 @@ function PlanCell({
                 disabled={isChanging}
                 onChange={(event) => onChangePlan(Number(event.target.value))}
                 aria-label={`Change plan for ${user.name}`}
-                className="rounded-lg border border-violet-200 bg-white/70 px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                className="rounded-lg border border-violet-200 bg-white/70 px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-hidden transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
             >
                 <option value="">No plan</option>
                 {plans.map((plan) => (
@@ -148,236 +80,139 @@ function PlanCell({
     );
 }
 
-function Pagination({
-    currentPage,
-    lastPage,
-    onNavigate,
-}: {
-    currentPage: number;
-    lastPage: number;
-    onNavigate: (page: number) => void;
-}) {
-    return (
-        <nav className="flex items-center justify-between gap-4 px-6 py-4" aria-label="Users pagination">
-            <button
-                type="button"
-                onClick={() => onNavigate(currentPage - 1)}
-                disabled={currentPage <= 1}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                Previous
-            </button>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Page {currentPage} of {lastPage}
-            </p>
-            <button
-                type="button"
-                onClick={() => onNavigate(currentPage + 1)}
-                disabled={currentPage >= lastPage}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-            >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-        </nav>
-    );
-}
+export default function UsersIndex({ users, plans, stats }: Props) {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [changingUserPlanId, setChangingUserPlanId] = useState<number | null>(null);
 
-/* -------------------------------------------------------------------------- */
-/*  Page                                                                      */
-/* -------------------------------------------------------------------------- */
+    const filteredUsers = useMemo(() => {
+        if (!searchQuery.trim()) return users.data;
+        const q = searchQuery.toLowerCase();
+        return users.data.filter(
+            (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+        );
+    }, [users.data, searchQuery]);
 
-export default function AdminUsers({ users, plans, stats }: Props) {
-    const [search, setSearch] = useState('');
-    const [changingPlan, setChangingPlan] = useState<number | null>(null);
-
-    const handleChangePlan = (userId: number, planId: number) => {
-        if (!confirm("Are you sure you want to change this user's plan?")) return;
-
-        setChangingPlan(userId);
+    const handlePlanChange = (userId: number, newPlanId: number) => {
+        setChangingUserPlanId(userId);
         router.post(
-            route('admin.update-user-plan', userId),
-            { plan_id: planId },
+            `/admin/users/${userId}/change-plan`,
+            { plan_id: newPlanId },
             {
                 preserveScroll: true,
-                onFinish: () => {
-                    setChangingPlan(null);
-                },
+                onFinish: () => setChangingUserPlanId(null),
             },
         );
     };
 
-    const goToPage = (page: number) => {
-        if (page < 1 || page > users.last_page) return;
-        router.get('/admin/users', { page, search }, { preserveScroll: true, preserveState: true });
-    };
-
-    const filteredUsers = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        if (!query) return users.data;
-        return users.data.filter(
-            (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query),
-        );
-    }, [search, users.data]);
-
-    const totalUsers = stats?.totalUsers ?? users.total;
-    const activeSubscriptions = stats?.activeSubscriptions ?? users.data.filter((u) => u.plan).length;
-    const totalPdfsProcessed =
-        stats?.totalPdfsProcessed ?? users.data.reduce((sum, u) => sum + (u.pdf_summaries_count ?? 0), 0);
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="All Users - Admin Panel" />
+            <Head title="User Management - PDF Summarizer" />
 
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-6">
-                {/* Header */}
-                <div>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        User Management
-                    </h1>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        Manage all users and their subscription plans
-                    </p>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            User Management
+                        </h1>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            View registered members, subscription plans, and document usage
+                        </p>
+                    </div>
                 </div>
 
-                {/* Stat cards */}
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                    <StatCard icon={Users} label="Total Users" value={totalUsers} />
-                    <StatCard icon={CreditCard} label="Active Subscriptions" value={activeSubscriptions} />
-                    <StatCard icon={FileText} label="Total PDFs Processed" value={totalPdfsProcessed} />
-                </div>
+                {stats && (
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                        <StatCard icon={Users} label="Total registered users" value={stats.totalUsers} accent="violet" />
+                        <StatCard icon={CreditCard} label="Active subscriptions" value={stats.activeSubscriptions} accent="emerald" />
+                        <StatCard icon={FileText} label="PDFs processed" value={stats.totalPdfsProcessed} accent="indigo" />
+                    </div>
+                )}
 
-                {/* Search */}
-                <div className="relative max-w-xs">
-                    <Search
-                        className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400"
-                        aria-hidden="true"
-                    />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search by name or email"
-                        aria-label="Search users"
-                        className="w-full rounded-xl border border-violet-100 bg-white/80 py-2.5 pr-3 pl-9 text-sm text-slate-700 shadow-sm outline-none backdrop-blur-xl transition-colors placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
-                    />
-                </div>
+                <SectionCard className="p-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="relative max-w-sm flex-1">
+                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search by name or email..."
+                                className="w-full rounded-xl border border-violet-200 bg-white/70 pl-10 pr-4 py-2 text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-hidden transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                            />
+                        </div>
+                    </div>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-3xl border border-violet-100 bg-white/80 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
+                    <div className="mt-6 overflow-x-auto">
+                        <table className="w-full text-left text-xs">
                             <thead>
-                                <tr className="border-b border-violet-100 bg-violet-50/60 dark:border-white/10 dark:bg-white/5">
-                                    <th className="px-6 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                        User
-                                    </th>
-                                    <th className="px-6 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                        Current Plan
-                                    </th>
-                                    <th className="px-6 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                        Usage
-                                    </th>
-                                    <th className="px-6 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                        Total PDFs
-                                    </th>
-                                    <th className="px-6 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                        Joined
-                                    </th>
+                                <tr className="border-b border-slate-100 text-slate-400 dark:border-white/5">
+                                    <th className="pb-3 font-semibold">User</th>
+                                    <th className="pb-3 font-semibold">Role</th>
+                                    <th className="pb-3 font-semibold">Current Plan</th>
+                                    <th className="pb-3 font-semibold">PDF Usage</th>
+                                    <th className="pb-3 font-semibold">Joined</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-violet-100 dark:divide-white/10">
-                                {filteredUsers.length === 0 ? (
+                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                {filteredUsers.length > 0 ? (
+                                    filteredUsers.map((u) => (
+                                        <tr key={u.id} className="group">
+                                            <td className="py-3.5">
+                                                <div className="font-bold text-slate-900 dark:text-white">
+                                                    {u.name}
+                                                </div>
+                                                <div className="text-[11px] text-slate-400">{u.email}</div>
+                                            </td>
+                                            <td className="py-3.5">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                                        u.role === 'admin'
+                                                            ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+                                                            : 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300'
+                                                    }`}
+                                                >
+                                                    {u.role === 'admin' && <ShieldCheck className="h-3 w-3" />}
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5">
+                                                <PlanCell
+                                                    user={u}
+                                                    plans={plans}
+                                                    isChanging={changingUserPlanId === u.id}
+                                                    onChangePlan={(planId) => handlePlanChange(u.id, planId)}
+                                                />
+                                            </td>
+                                            <td className="py-3.5 font-medium text-slate-600 dark:text-slate-300">
+                                                {u.pdf_count ?? 0} docs
+                                            </td>
+                                            <td className="py-3.5 text-slate-400">
+                                                <div className="flex items-center gap-1">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {formatDate(u.created_at)}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                                            No users match your search.
+                                        <td colSpan={5} className="py-8 text-center text-slate-400">
+                                            No users matching your search filter.
                                         </td>
                                     </tr>
-                                ) : (
-                                    filteredUsers.map((user) => {
-                                        const usagePercent = user.plan?.pdf_limit
-                                            ? Math.min(100, Math.round((user.pdf_count / user.plan.pdf_limit) * 100))
-                                            : 0;
-
-                                        return (
-                                            <tr
-                                                key={user.id}
-                                                className="transition-colors hover:bg-violet-50/50 dark:hover:bg-white/5"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                                                                {user.name}
-                                                            </p>
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                                {user.email}
-                                                            </p>
-                                                        </div>
-                                                        {user.role === 'admin' && (
-                                                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-slate-300">
-                                                                <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-                                                                Admin
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <PlanCell
-                                                        user={user}
-                                                        plans={plans}
-                                                        isChanging={changingPlan === user.id}
-                                                        onChangePlan={(planId) => handleChangePlan(user.id, planId)}
-                                                    />
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {user.plan ? (
-                                                        <div className="w-32">
-                                                            <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                                                {user.pdf_count} / {user.plan.pdf_limit}
-                                                            </p>
-                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-violet-100 dark:bg-white/10">
-                                                                <div
-                                                                    className="h-full rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 transition-all duration-500"
-                                                                    style={{ width: `${usagePercent}%` }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                                                        <FileText className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                                                        {user.pdf_summaries_count}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                                                        <Calendar className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                                                        {formatDate(user.created_at)}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    {users.last_page > 1 && (
-                        <div className="border-t border-violet-100 dark:border-white/10">
-                            <Pagination
-                                currentPage={users.current_page}
-                                lastPage={users.last_page}
-                                onNavigate={goToPage}
-                            />
-                        </div>
-                    )}
-                </div>
+                    <Pagination
+                        currentPage={users.current_page}
+                        lastPage={users.last_page}
+                        total={users.total}
+                        perPage={users.per_page}
+                        baseUrl="/admin/users"
+                    />
+                </SectionCard>
             </div>
         </AppLayout>
     );

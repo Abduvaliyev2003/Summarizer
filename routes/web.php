@@ -47,11 +47,62 @@ Route::get('dashboard', function () {
     ];
 
     if ($user->isAdmin()) {
+        $plans = Plan::withCount('users')->get();
+        $totalUsers = User::count();
+        $activeUsers = User::whereNotNull('stripe_subscription_id')->count();
+        $totalPdfs = PdfSummary::count();
+
+        // Calculations
+        $monthlyRevenue = $plans->reduce(function ($sum, $plan) {
+            return $sum + ($plan->price * $plan->users_count);
+        }, 0);
+
+        // Growth rate compared to last month
+        $now = now();
+        $usersThisMonth = User::where('created_at', '>=', $now->copy()->startOfMonth())->count();
+        $usersLastMonth = User::whereBetween('created_at', [
+            $now->copy()->subMonth()->startOfMonth(),
+            $now->copy()->subMonth()->endOfMonth(),
+        ])->count();
+
+        $userGrowthTrend = $usersLastMonth > 0
+            ? round((($usersThisMonth - $usersLastMonth) / $usersLastMonth) * 100, 1)
+            : ($usersThisMonth > 0 ? 100 : 0);
+
+        $pdfsThisMonth = PdfSummary::where('created_at', '>=', $now->copy()->startOfMonth())->count();
+
+        // 6 months trend data for interactive charts
+        $monthlyTrend = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $monthDate = $now->copy()->subMonths($i);
+            $monthName = $monthDate->format('M');
+            $start = $monthDate->copy()->startOfMonth();
+            $end = $monthDate->copy()->endOfMonth();
+
+            $monthlyTrend[] = [
+                'month' => $monthName,
+                'users' => User::whereBetween('created_at', [$start, $end])->count(),
+                'pdfs' => PdfSummary::whereBetween('created_at', [$start, $end])->count(),
+            ];
+        }
+
+        // Recent users for admin table
+        $recentUsers = User::with('plan:id,name,slug')
+            ->latest()
+            ->limit(5)
+            ->get(['id', 'name', 'email', 'plan_id', 'pdf_count', 'created_at']);
+
         $data['adminStats'] = [
-            'totalUsers' => User::count(),
-            'activeUsers' => User::whereNotNull('stripe_subscription_id')->count(),
-            'totalPdfs' => PdfSummary::count(),
-            'plans' => Plan::withCount('users')->get(),
+            'totalUsers' => $totalUsers,
+            'activeUsers' => $activeUsers,
+            'totalPdfs' => $totalPdfs,
+            'monthlyRevenue' => $monthlyRevenue,
+            'usersThisMonth' => $usersThisMonth,
+            'pdfsThisMonth' => $pdfsThisMonth,
+            'userGrowthTrend' => $userGrowthTrend,
+            'plans' => $plans,
+            'monthlyTrend' => $monthlyTrend,
+            'recentUsers' => $recentUsers,
         ];
     } else {
         $data['userStats'] = [

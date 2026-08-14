@@ -4,22 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class AdminController extends Controller
 {
-    public  function users() {
+    public function users()
+    {
         $users = User::with('plan')
-        ->withCount('pdfSummaries')
-        ->orderBy('created_at', 'desc')
-        ->paginate(10);
+            ->withCount('pdfSummaries')
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return Inertia::render('admin/users', [
             'users' => $users,
         ]);
     }
 
-
-    public function updateUserPlan(Request $request, User $user) {
+    public function updateUserPlan(Request $request, User $user)
+    {
         $request->validate([
             'plan_id' => 'required|exists:plans,id',
         ]);
@@ -31,6 +33,4 @@ class AdminController extends Controller
 
         return back()->with('success', 'Plan updated successfully.');
     }
-
-    
 }

@@ -1,20 +1,13 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Pagination } from '@/components/ui/pagination';
+import { SectionCard } from '@/components/ui/section-card';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import {
-    Calendar,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    Download,
-    FileText,
-    Inbox,
-    Loader2,
-    Sparkles,
-} from 'lucide-react';
+import { formatDateTime } from '@/lib/format';
+import { BreadcrumbItem, PaginatedResponse, PdfSummary } from '@/types';
+import { Head, Link, router } from '@inertiajs/react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { Calendar, ChevronDown, Download, FileText, Inbox, Loader2, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -27,40 +20,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface Summary {
-    id: number;
-    filename: string;
-    summary: string;
-    created_at: string;
-    pdf_id: number;
-    user_id: number;
-}
-
 interface Props {
-    summaries: {
-        data: Summary[];
-        current_page: number;
-        last_page: number;
-        total: number;
-        per_page: number;
-    };
+    summaries: PaginatedResponse<PdfSummary>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
-function downloadAsText(summary: Summary): void {
+function downloadAsText(summary: PdfSummary): void {
     const element = document.createElement('a');
     const file = new Blob([summary.summary], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
@@ -71,7 +35,7 @@ function downloadAsText(summary: Summary): void {
     URL.revokeObjectURL(element.href);
 }
 
-async function exportAsPdf(summary: Summary): Promise<void> {
+async function exportAsPdf(summary: PdfSummary): Promise<void> {
     const exportContainer = document.createElement('div');
     exportContainer.setAttribute('data-export-container', 'true');
     exportContainer.style.cssText = `
@@ -93,7 +57,7 @@ async function exportAsPdf(summary: Summary): Promise<void> {
                     ${summary.filename}
                 </p>
                 <p style="font-size: 12px; color: #666666; margin: 0;">
-                    ${formatDate(summary.created_at)}
+                    ${formatDateTime(summary.created_at)}
                 </p>
             </div>
             <div style="color: #000000; line-height: 1.75;">
@@ -147,148 +111,95 @@ async function exportAsPdf(summary: Summary): Promise<void> {
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Small reusable pieces                                                      */
-/* -------------------------------------------------------------------------- */
+function SummaryCard({ summary }: { summary: PdfSummary }) {
+    const [expanded, setExpanded] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportFormat, setExportFormat] = useState<'txt' | 'pdf'>('txt');
 
-function SummaryCard({
-    summary,
-    isExporting,
-    onExport,
-}: {
-    summary: Summary;
-    isExporting: boolean;
-    onExport: () => void;
-}) {
+    const handleExport = async (format: 'txt' | 'pdf') => {
+        setIsExporting(true);
+        setExportFormat(format);
+        try {
+            if (format === 'txt') {
+                downloadAsText(summary);
+            } else {
+                await exportAsPdf(summary);
+            }
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
-        <details className="group overflow-hidden rounded-3xl border border-violet-100 bg-white/80 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 hover:shadow-2xl hover:shadow-violet-900/10 dark:border-white/10 dark:bg-white/5">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-6 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset">
-                <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 text-white shadow-md shadow-violet-600/20">
-                        <FileText className="h-4.5 w-4.5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+        <SectionCard className="p-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 flex-none items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                        <FileText className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
                             {summary.filename}
-                        </p>
-                        <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                            <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                            {formatDate(summary.created_at)}
-                        </p>
+                        </h3>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{formatDateTime(summary.created_at)}</span>
+                        </div>
                     </div>
                 </div>
-                <ChevronDown
-                    className="h-4 w-4 flex-none text-violet-500 transition-transform duration-300 group-open:rotate-180"
-                    aria-hidden="true"
-                />
-            </summary>
 
-            <div className="border-t border-violet-100 px-6 pb-6 pt-4 dark:border-white/10">
-                <p className="line-clamp-6 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    {summary.summary}
-                </p>
-
-                <div className="mt-5 flex flex-wrap gap-3">
+                <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        onClick={() => downloadAsText(summary)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/70 px-3 py-1.5 text-xs font-semibold text-violet-600 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-white/5 dark:text-violet-400 dark:hover:bg-white/10"
-                    >
-                        <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                        Download .txt
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={onExport}
+                        onClick={() => handleExport('txt')}
                         disabled={isExporting}
-                        aria-busy={isExporting}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-violet-600/20 outline-none transition-all hover:scale-[1.02] hover:shadow-md focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:scale-100"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                     >
-                        {isExporting ? (
-                            <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                                Exporting&hellip;
-                            </>
+                        {isExporting && exportFormat === 'txt' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                            <>
-                                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                                Export as PDF
-                            </>
+                            <Download className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
                         )}
+                        <span>TXT</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleExport('pdf')}
+                        disabled={isExporting}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                    >
+                        {isExporting && exportFormat === 'pdf' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Download className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                        )}
+                        <span>PDF</span>
                     </button>
                 </div>
             </div>
-        </details>
+
+            <div className="mt-4 rounded-2xl bg-slate-50/80 p-4 dark:bg-white/5">
+                <p className={`text-sm leading-relaxed text-slate-700 dark:text-slate-300 ${expanded ? '' : 'line-clamp-3'}`}>
+                    {summary.summary}
+                </p>
+                {summary.summary.length > 180 && (
+                    <button
+                        type="button"
+                        onClick={() => setExpanded(!expanded)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-violet-600 hover:underline dark:text-violet-400"
+                    >
+                        <span>{expanded ? 'Show less' : 'Read full summary'}</span>
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    </button>
+                )}
+            </div>
+        </SectionCard>
     );
 }
-
-function Pagination({
-    currentPage,
-    lastPage,
-    onNavigate,
-}: {
-    currentPage: number;
-    lastPage: number;
-    onNavigate: (page: number) => void;
-}) {
-    return (
-        <nav className="flex items-center justify-between gap-4 pt-2" aria-label="History pagination">
-            <button
-                type="button"
-                onClick={() => onNavigate(currentPage - 1)}
-                disabled={currentPage <= 1}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                Previous
-            </button>
-
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Page {currentPage} of {lastPage}
-            </p>
-
-            <button
-                type="button"
-                onClick={() => onNavigate(currentPage + 1)}
-                disabled={currentPage >= lastPage}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 outline-none transition-colors hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-            >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-        </nav>
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Page                                                                      */
-/* -------------------------------------------------------------------------- */
 
 export default function History({ summaries }: Props) {
-    const [exportingId, setExportingId] = useState<number | null>(null);
-
-    const isEmpty = summaries.data.length === 0;
-
-    const goToPage = (page: number) => {
-        if (page < 1 || page > summaries.last_page) return;
-        router.get(
-            '/history',
-            { page },
-            { preserveScroll: true, preserveState: true },
-        );
-    };
-
-    const handleExport = async (summary: Summary) => {
-        if (exportingId !== null) return;
-        setExportingId(summary.id);
-        try {
-            await exportAsPdf(summary);
-        } catch (error) {
-            console.error('Error exporting PDF:', error);
-        } finally {
-            setExportingId(null);
-        }
+    const handlePageChange = (page: number) => {
+        router.get('/history', { page }, { preserveScroll: true });
     };
 
     return (
@@ -299,55 +210,47 @@ export default function History({ summaries }: Props) {
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                            Summary history
+                            Summary History
                         </h1>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                            {summaries.total} summar{summaries.total === 1 ? 'y' : 'ies'} generated so far
+                            Access and export all your past AI-generated document summaries
                         </p>
                     </div>
                 </div>
 
-                {isEmpty ? (
-                    <div className="flex flex-1 flex-col items-center justify-center rounded-3xl border border-violet-100 bg-white/80 p-12 text-center shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                            <Inbox className="h-6 w-6" aria-hidden="true" />
+                {summaries.data.length === 0 ? (
+                    <SectionCard className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                            <Inbox className="h-7 w-7" />
                         </div>
-                        <h2 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">
+                        <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
                             No summaries yet
                         </h2>
-                        <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">
-                            Once you summarize a PDF, it will show up here so you can revisit, download, or
-                            export it anytime.
+                        <p className="mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">
+                            Upload a PDF document to generate your first AI summary.
                         </p>
                         <Link
                             href="/"
-                            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition-all hover:scale-[1.02] hover:bg-violet-700 hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none"
+                            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-violet-500/20 transition-all hover:scale-105"
                         >
-                            <Sparkles className="h-4 w-4" aria-hidden="true" />
-                            Summarize a PDF
+                            <Sparkles className="h-4 w-4" />
+                            Summarize PDF Now
                         </Link>
-                    </div>
+                    </SectionCard>
                 ) : (
-                    <>
-                        <div className="space-y-4">
-                            {summaries.data.map((summary) => (
-                                <SummaryCard
-                                    key={summary.id}
-                                    summary={summary}
-                                    isExporting={exportingId === summary.id}
-                                    onExport={() => handleExport(summary)}
-                                />
-                            ))}
-                        </div>
+                    <div className="space-y-4">
+                        {summaries.data.map((summary) => (
+                            <SummaryCard key={summary.id} summary={summary} />
+                        ))}
 
-                        {summaries.last_page > 1 && (
-                            <Pagination
-                                currentPage={summaries.current_page}
-                                lastPage={summaries.last_page}
-                                onNavigate={goToPage}
-                            />
-                        )}
-                    </>
+                        <Pagination
+                            currentPage={summaries.current_page}
+                            lastPage={summaries.last_page}
+                            total={summaries.total}
+                            perPage={summaries.per_page}
+                            onPageChange={handlePageChange}
+                        />
+                    </div>
                 )}
             </div>
         </AppLayout>

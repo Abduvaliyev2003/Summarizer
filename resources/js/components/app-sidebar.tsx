@@ -74,11 +74,6 @@ export function AppSidebar() {
             url: '/admin/users',
             icon: Users,
         },
-        {
-            title: 'Billing',
-            url: '/billing',
-            icon: CreditCard,
-        },
     ];
 
     const mainNavItems = isAdmin ? adminNavItems : userNavItems;

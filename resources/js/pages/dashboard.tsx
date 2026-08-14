@@ -1,73 +1,32 @@
+import { AdminAnalyticsCharts } from '@/components/dashboard/admin-analytics-charts';
+import { CircularProgress } from '@/components/dashboard/circular-progress';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatCard } from '@/components/ui/stat-card';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { formatDate, formatPrice } from '@/lib/format';
+import { AdminStats, BreadcrumbItem, PdfSummary, User, UserStats } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import {
     AlertCircle,
     ArrowUpRight,
-    Calendar,
     CheckCircle2,
     Clock,
-    CreditCard,
+    DollarSign,
     FileText,
     History as HistoryIcon,
     Sparkles,
-    TrendingUp,
     Upload,
+    UserCheck,
     Users,
     X,
     Zap,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
-
-/* -------------------------------------------------------------------------- */
-/*  Types                                                                      */
-/* -------------------------------------------------------------------------- */
-
-interface User {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-    plan?: {
-        id: number;
-        name: string;
-        pdf_limit: number;
-    };
-}
-
-interface UserStats {
-    pdfCount: number;
-    pdfLimit: number;
-    planName: string;
-    totalSummaries: number;
-}
-
-interface RecentSummary {
-    id: number;
-    filename: string;
-    summary: string;
-    created_at: string;
-}
-
-interface AdminPlanBreakdown {
-    id: number;
-    name: string;
-    slug: string;
-    price: number;
-    users_count: number;
-}
-
-interface AdminStats {
-    totalUsers: number;
-    activeUsers: number;
-    totalPdfs: number;
-    plans: AdminPlanBreakdown[];
-}
+import { useState } from 'react';
 
 interface Props {
     user: User;
     userStats?: UserStats;
-    recentSummaries?: RecentSummary[];
+    recentSummaries?: PdfSummary[];
     adminStats?: AdminStats;
     flash?: {
         success?: string;
@@ -82,295 +41,51 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Circular Progress Ring                                                     */
-/* -------------------------------------------------------------------------- */
-
-function CircularProgress({
-    percent,
-    used,
-    limit,
-    planName,
-    isNearLimit,
-    isUnlimited,
+function FlashToast({
+    flash,
+    onDismiss,
 }: {
-    percent: number;
-    used: number;
-    limit: number;
-    planName: string;
-    isNearLimit: boolean;
-    isUnlimited: boolean;
+    flash: { success?: string; error?: string };
+    onDismiss: () => void;
 }) {
-    const size = 160;
-    const strokeWidth = 12;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (percent / 100) * circumference;
-
-    const ringColor = isUnlimited
-        ? 'url(#ringGradientUnlimited)'
-        : isNearLimit
-          ? 'url(#ringGradientAmber)'
-          : 'url(#ringGradientViolet)';
+    const isSuccess = Boolean(flash.success);
+    const message = flash.success || flash.error;
 
     return (
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
-            {/* SVG Ring */}
-            <div className="relative flex-none" style={{ width: size, height: size }}>
-                <svg width={size} height={size} className="-rotate-90">
-                    <defs>
-                        <linearGradient id="ringGradientViolet" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#7c3aed" />
-                            <stop offset="50%" stopColor="#9333ea" />
-                            <stop offset="100%" stopColor="#4f46e5" />
-                        </linearGradient>
-                        <linearGradient id="ringGradientAmber" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#f59e0b" />
-                            <stop offset="100%" stopColor="#ef4444" />
-                        </linearGradient>
-                        <linearGradient id="ringGradientUnlimited" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#10b981" />
-                            <stop offset="100%" stopColor="#059669" />
-                        </linearGradient>
-                    </defs>
-                    {/* Track */}
-                    <circle
-                        cx={size / 2}
-                        cy={size / 2}
-                        r={radius}
-                        fill="none"
-                        strokeWidth={strokeWidth}
-                        className="stroke-violet-100 dark:stroke-white/10"
-                    />
-                    {/* Progress */}
-                    <circle
-                        cx={size / 2}
-                        cy={size / 2}
-                        r={radius}
-                        fill="none"
-                        stroke={ringColor}
-                        strokeWidth={strokeWidth}
-                        strokeLinecap="round"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={isUnlimited ? 0 : offset}
-                        style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
-                    />
-                </svg>
-
-                {/* Center label */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    {isUnlimited ? (
-                        <Zap className="h-8 w-8 text-emerald-500" aria-hidden="true" />
-                    ) : (
-                        <>
-                            <span
-                                className={`text-3xl font-extrabold leading-none ${
-                                    isNearLimit
-                                        ? 'text-amber-500'
-                                        : 'bg-gradient-to-br from-violet-600 to-indigo-600 bg-clip-text text-transparent'
-                                }`}
-                            >
-                                {percent}%
-                            </span>
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                used
-                            </span>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Text details */}
-            <div className="flex flex-col gap-2">
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                        Monthly usage
-                    </p>
-                    <p className="mt-1 text-3xl font-extrabold text-slate-900 dark:text-white">
-                        {isUnlimited ? (
-                            <span className="text-emerald-500">Unlimited</span>
-                        ) : (
-                            <>
-                                <span
-                                    className={
-                                        isNearLimit
-                                            ? 'text-amber-500'
-                                            : 'bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent'
-                                    }
-                                >
-                                    {used}
-                                </span>
-                                <span className="text-xl font-semibold text-slate-400 dark:text-slate-500">
-                                    {' '}
-                                    / {limit}
-                                </span>
-                            </>
-                        )}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {isUnlimited
-                            ? 'No limits on your plan'
-                            : `${Math.max(0, limit - used)} documents remaining this month`}
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                            isUnlimited
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : isNearLimit
-                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                  : 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
-                        }`}
-                    >
-                        <Sparkles className="h-3 w-3" aria-hidden="true" />
-                        {planName}
-                    </span>
-
-                    {isNearLimit && !isUnlimited && (
-                        <Link
-                            href="/billing"
-                            className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-violet-600/20 transition-all duration-300 hover:scale-[1.03] hover:shadow-md hover:shadow-violet-600/30"
-                        >
-                            Upgrade
-                            <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                        </Link>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Reusable pieces                                                            */
-/* -------------------------------------------------------------------------- */
-
-function StatCard({
-    icon: Icon,
-    label,
-    value,
-    hint,
-    accent = 'violet',
-}: {
-    icon: typeof Users;
-    label: string;
-    value: ReactNode;
-    hint?: string;
-    accent?: 'violet' | 'emerald' | 'indigo' | 'amber';
-}) {
-    const accentStyles: Record<string, string> = {
-        violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-        emerald: 'bg-emerald-500/10 text-emerald-500',
-        indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-        amber: 'bg-amber-500/10 text-amber-500',
-    };
-
-    return (
-        <div className="rounded-3xl border border-violet-100 bg-white/80 p-6 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-violet-900/10 dark:border-white/10 dark:bg-white/5">
-            <div className="flex items-center justify-between">
-                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${accentStyles[accent]}`}>
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-            </div>
-            <p className="mt-4 text-2xl font-extrabold text-slate-900 dark:text-white">{value}</p>
-            <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
-            {hint && <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
-        </div>
-    );
-}
-
-function QuickAction({
-    icon: Icon,
-    title,
-    description,
-    href,
-}: {
-    icon: typeof Upload;
-    title: string;
-    description: string;
-    href: string;
-}) {
-    return (
-        <Link
-            href={href}
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-violet-100 bg-white/70 p-5 shadow-sm outline-none transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-lg hover:shadow-violet-900/10 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-white/5 dark:hover:border-violet-500/30"
+        <div
+            role="alert"
+            aria-live="polite"
+            className={`flex items-center justify-between gap-3 rounded-2xl border p-4 shadow-lg backdrop-blur-xl transition-all ${
+                isSuccess
+                    ? 'border-emerald-200 bg-emerald-50/90 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'border-rose-200 bg-rose-50/90 text-rose-900 dark:border-rose-500/20 dark:bg-rose-950/40 dark:text-rose-200'
+            }`}
         >
             <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 text-white shadow-md shadow-violet-600/20">
-                    <Icon className="h-4.5 w-4.5" aria-hidden="true" />
-                </span>
-                <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
-                </div>
-            </div>
-            <ArrowUpRight
-                className="h-4 w-4 flex-none text-slate-300 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-500"
-                aria-hidden="true"
-            />
-        </Link>
-    );
-}
-
-function FlashToast({ flash, onDismiss }: { flash: { success?: string; error?: string }; onDismiss: () => void }) {
-    const message = flash.success ?? flash.error;
-    const isSuccess = Boolean(flash.success);
-
-    if (!message) return null;
-
-    return (
-        <div className="fixed top-4 right-4 z-50 w-full max-w-sm animate-[fadeIn_0.3s_ease-out]">
-            <div
-                role="alert"
-                className={`flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur-xl ${
-                    isSuccess
-                        ? 'border-emerald-200 bg-emerald-50/95 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400'
-                        : 'border-rose-200 bg-rose-50/95 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400'
-                }`}
-            >
                 {isSuccess ? (
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 flex-none" aria-hidden="true" />
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                 ) : (
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-none" aria-hidden="true" />
+                    <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
                 )}
-                <p className="flex-1 text-sm font-medium leading-5">{message}</p>
-                <button
-                    type="button"
-                    onClick={onDismiss}
-                    aria-label="Dismiss notification"
-                    className="rounded-md p-0.5 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-current dark:hover:bg-white/10"
-                >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                </button>
+                <p className="text-sm font-semibold">{message}</p>
             </div>
+            <button
+                type="button"
+                onClick={onDismiss}
+                className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                aria-label="Dismiss notification"
+            >
+                <X className="h-4 w-4" aria-hidden="true" />
+            </button>
         </div>
     );
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Page                                                                      */
-/* -------------------------------------------------------------------------- */
 
 export default function Dashboard({ user, userStats, recentSummaries, adminStats, flash }: Props) {
     const [dismissed, setDismissed] = useState(false);
     const isAdmin = user.role === 'admin';
 
-    // Normalised stats — always defined so UI never hides behind undefined checks
+    // Normalised stats
     const pdfCount = userStats?.pdfCount ?? 0;
     const pdfLimit = userStats?.pdfLimit ?? 0;
     const planName = userStats?.planName ?? 'No Plan';
@@ -381,8 +96,9 @@ export default function Dashboard({ user, userStats, recentSummaries, adminStats
         isUnlimited || pdfLimit === 0 ? 0 : Math.min(100, Math.round((pdfCount / pdfLimit) * 100));
     const isNearLimit = usagePercent >= 80 && !isUnlimited;
 
-    const totalMonthlyRevenue =
-        adminStats?.plans?.reduce((sum, plan) => sum + plan.price * plan.users_count, 0) ?? 0;
+    const calculatedRevenue =
+        adminStats?.monthlyRevenue ??
+        (adminStats?.plans?.reduce((sum, plan) => sum + plan.price * (plan.users_count ?? 0), 0) ?? 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -394,195 +110,274 @@ export default function Dashboard({ user, userStats, recentSummaries, adminStats
 
             <div className="flex h-full flex-1 flex-col gap-8 overflow-x-auto p-6">
                 {/* Header */}
-                <div>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        {isAdmin ? 'Admin overview' : `Welcome back, ${user.name.split(' ')[0]} 👋`}
-                    </h1>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {isAdmin
-                            ? "Here's how your platform is performing today."
-                            : "Here's a snapshot of your account and usage."}
-                    </p>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            {isAdmin ? 'Admin Command Center ⚡' : `Welcome back, ${user.name.split(' ')[0]} 👋`}
+                        </h1>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            {isAdmin
+                                ? 'Real-time overview of subscriptions, revenue, and platform activity.'
+                                : "Here's a snapshot of your account and usage."}
+                        </p>
+                    </div>
+
+                    {isAdmin && (
+                        <Link
+                            href="/admin/users"
+                            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                            <Users className="h-4 w-4" />
+                            Manage All Users
+                        </Link>
+                    )}
                 </div>
 
                 {isAdmin ? (
                     <>
-                        {/* Admin stat cards */}
+                        {/* Admin Stat Cards */}
                         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                             <StatCard
-                                icon={Users}
-                                label="Total users"
-                                value={adminStats?.totalUsers ?? 0}
-                                accent="violet"
-                            />
-                            <StatCard
-                                icon={CreditCard}
-                                label="Active subscriptions"
-                                value={adminStats?.activeUsers ?? 0}
+                                icon={DollarSign}
+                                label="Est. Monthly Revenue"
+                                value={formatPrice(calculatedRevenue)}
+                                hint="Active subscriber monthly total"
                                 accent="emerald"
                             />
                             <StatCard
-                                icon={FileText}
-                                label="PDFs processed"
-                                value={adminStats?.totalPdfs ?? 0}
+                                icon={Users}
+                                label="Total Users"
+                                value={adminStats?.totalUsers ?? 0}
+                                trend={adminStats?.userGrowthTrend}
+                                hint={`${adminStats?.usersThisMonth ?? 0} new this month`}
+                                accent="violet"
+                            />
+                            <StatCard
+                                icon={UserCheck}
+                                label="Active Subscriptions"
+                                value={adminStats?.activeUsers ?? 0}
+                                hint="Paid active members"
                                 accent="indigo"
                             />
                             <StatCard
-                                icon={TrendingUp}
-                                label="Est. monthly revenue"
-                                value={new Intl.NumberFormat('en-US', {
-                                    style: 'currency',
-                                    currency: 'USD',
-                                }).format(totalMonthlyRevenue)}
-                                hint="Sum of active plan prices × subscribers"
+                                icon={FileText}
+                                label="PDFs Processed"
+                                value={adminStats?.totalPdfs ?? 0}
+                                hint={`${adminStats?.pdfsThisMonth ?? 0} processed this month`}
                                 accent="amber"
                             />
                         </div>
 
-                        {/* Plans breakdown */}
-                        <div className="rounded-3xl border border-violet-100 bg-white/80 p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                                    Plans breakdown
-                                </h2>
-                                <Link
-                                    href="/admin/users"
-                                    className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-violet-600 outline-none transition-colors hover:text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:text-violet-400"
-                                >
-                                    Manage users
-                                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-                                </Link>
-                            </div>
+                        {/* Interactive Monthly Charts */}
+                        {adminStats?.monthlyTrend && <AdminAnalyticsCharts trend={adminStats.monthlyTrend} />}
 
-                            {!adminStats?.plans || adminStats.plans.length === 0 ? (
-                                <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
-                                    No active plans to show yet.
-                                </p>
-                            ) : (
-                                <div className="mt-6 space-y-4">
-                                    {adminStats.plans.map((plan) => {
-                                        const share =
-                                            adminStats.totalUsers > 0
-                                                ? Math.round((plan.users_count / adminStats.totalUsers) * 100)
-                                                : 0;
-
-                                        return (
-                                            <div key={plan.id}>
-                                                <div className="flex items-center justify-between text-sm">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-slate-900 dark:text-white">
-                                                            {plan.name}
-                                                        </span>
-                                                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                                                            {new Intl.NumberFormat('en-US', {
-                                                                style: 'currency',
-                                                                currency: 'USD',
-                                                            }).format(plan.price)}
-                                                            /mo
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                                        {plan.users_count} subscriber
-                                                        {plan.users_count === 1 ? '' : 's'}
-                                                    </span>
-                                                </div>
-                                                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-violet-100 dark:bg-white/10">
-                                                    <div
-                                                        className="h-full rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 transition-all duration-500"
-                                                        style={{ width: `${share}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                            {/* Plans Revenue Breakdown */}
+                            <SectionCard className="p-6 lg:col-span-1">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                                        Subscription Plans
+                                    </h2>
+                                    <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                                        {adminStats?.plans?.length ?? 0} Active Plans
+                                    </span>
                                 </div>
-                            )}
+
+                                {!adminStats?.plans || adminStats.plans.length === 0 ? (
+                                    <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
+                                        No active plans available.
+                                    </p>
+                                ) : (
+                                    <div className="mt-6 space-y-5">
+                                        {adminStats.plans.map((plan) => {
+                                            const totalUsers = adminStats.totalUsers || 1;
+                                            const usersCount = plan.users_count ?? 0;
+                                            const share = Math.round((usersCount / totalUsers) * 100);
+                                            const planRevenue = plan.price * usersCount;
+
+                                            return (
+                                                <div
+                                                    key={plan.id}
+                                                    className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-white/5 dark:bg-white/5"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                                                {plan.name}
+                                                            </p>
+                                                            <p className="text-xs text-slate-400">
+                                                                {formatPrice(plan.price)}/mo per user
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                                                                {formatPrice(planRevenue)}
+                                                            </p>
+                                                            <p className="text-[11px] font-semibold text-slate-500">
+                                                                {usersCount} users ({share}%)
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                                                        <div
+                                                            className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-600"
+                                                            style={{ width: `${share}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </SectionCard>
+
+                            {/* Recent Registered Users Table */}
+                            <SectionCard className="p-6 lg:col-span-2">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                                            Recent Registered Users
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            Latest member sign-ups & document usage
+                                        </p>
+                                    </div>
+                                    <Link
+                                        href="/admin/users"
+                                        className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 hover:underline dark:text-violet-400"
+                                    >
+                                        View all
+                                        <ArrowUpRight className="h-3.5 w-3.5" />
+                                    </Link>
+                                </div>
+
+                                <div className="mt-6 overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead>
+                                            <tr className="border-b border-slate-100 text-slate-400 dark:border-white/5">
+                                                <th className="pb-3 font-semibold">User</th>
+                                                <th className="pb-3 font-semibold">Plan</th>
+                                                <th className="pb-3 font-semibold">PDF Usage</th>
+                                                <th className="pb-3 font-semibold">Joined</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                            {adminStats?.recentUsers && adminStats.recentUsers.length > 0 ? (
+                                                adminStats.recentUsers.map((u) => (
+                                                    <tr key={u.id} className="group">
+                                                        <td className="py-3">
+                                                            <div className="font-bold text-slate-900 dark:text-white">
+                                                                {u.name}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-400">{u.email}</div>
+                                                        </td>
+                                                        <td className="py-3">
+                                                            <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-bold text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                                                                {u.plan?.name ?? 'Free'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 font-medium text-slate-600 dark:text-slate-300">
+                                                            {u.pdf_count ?? 0} docs
+                                                        </td>
+                                                        <td className="py-3 text-slate-400">{formatDate(u.created_at)}</td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={4} className="py-4 text-center text-slate-400">
+                                                        No users found.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </SectionCard>
                         </div>
                     </>
                 ) : (
                     <>
-                        {/* ---------------------------------------------------------- */}
-                        {/* USAGE HERO CARD — always visible, circular ring              */}
-                        {/* ---------------------------------------------------------- */}
-                        <div
-                            className={`relative overflow-hidden rounded-3xl border p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 ${
+                        {/* USAGE HERO CARD */}
+                        <SectionCard
+                            glow
+                            className={`p-8 ${
                                 isNearLimit
                                     ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
                                     : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
                             }`}
                         >
-                            {/* decorative glow */}
-                            <div
-                                className="pointer-events-none absolute -top-12 -right-12 h-48 w-48 rounded-full bg-gradient-to-br from-violet-400/20 via-purple-400/10 to-transparent blur-2xl dark:from-violet-600/15"
-                                aria-hidden="true"
-                            />
-
                             <CircularProgress
-                                percent={isUnlimited ? 100 : usagePercent}
-                                used={pdfCount}
-                                limit={pdfLimit}
-                                planName={planName}
-                                isNearLimit={isNearLimit}
+                                percent={usagePercent}
+                                pdfCount={pdfCount}
+                                pdfLimit={pdfLimit}
                                 isUnlimited={isUnlimited}
+                                isNearLimit={isNearLimit}
                             />
-                        </div>
 
-                        {/* User stat cards */}
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <div className="mt-6 text-center">
+                                <h2 className="text-[11px] font-extrabold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+                                    Current Plan: {planName}
+                                </h2>
+                                <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {isUnlimited
+                                        ? 'Enjoy unlimited PDF summaries.'
+                                        : `${pdfCount} of ${pdfLimit} documents used this month.`}
+                                </p>
+
+                                {isNearLimit && (
+                                    <div className="mt-4 flex items-center justify-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                        <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                                        <span>You are running low on monthly document limit.</span>
+                                        <Link
+                                            href="/billing"
+                                            className="font-bold underline transition-colors hover:text-amber-900 dark:hover:text-amber-300"
+                                        >
+                                            Upgrade plan
+                                        </Link>
+                                    </div>
+                                )}
+                            </div>
+                        </SectionCard>
+
+                        {/* Quick action grid */}
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
                             <StatCard
                                 icon={FileText}
-                                label="Total summaries"
+                                label="Monthly PDF Usage"
+                                value={isUnlimited ? `${pdfCount} / ∞` : `${pdfCount} / ${pdfLimit}`}
+                                hint={isUnlimited ? 'Unlimited plan' : `${100 - usagePercent}% remaining`}
+                                accent="violet"
+                            />
+                            <StatCard
+                                icon={HistoryIcon}
+                                label="Total Summaries"
                                 value={totalSummaries}
+                                hint="Processed with AI"
                                 accent="indigo"
                             />
                             <StatCard
-                                icon={TrendingUp}
-                                label="Documents remaining"
-                                value={isUnlimited ? '∞' : Math.max(0, pdfLimit - pdfCount)}
-                                hint={isUnlimited ? 'Unlimited plan — no monthly cap' : `${pdfCount} of ${pdfLimit} used this month`}
-                                accent={isNearLimit ? 'amber' : 'emerald'}
+                                icon={Zap}
+                                label="Active Plan"
+                                value={planName}
+                                hint={isUnlimited ? 'Full access' : 'Monthly subscription'}
+                                accent="emerald"
                             />
                         </div>
 
-                        {/* Quick actions */}
-                        <div>
-                            <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
-                                Quick actions
-                            </h2>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                <QuickAction
-                                    icon={Upload}
-                                    title="Summarize a PDF"
-                                    description="Upload a new document"
-                                    href="/"
-                                />
-                                <QuickAction
-                                    icon={HistoryIcon}
-                                    title="View history"
-                                    description="See past summaries"
-                                    href="/history"
-                                />
-                                <QuickAction
-                                    icon={CreditCard}
-                                    title="Manage billing"
-                                    description="Plan, invoices & payment"
-                                    href="/billing"
-                                />
-                            </div>
-                        </div>
-
                         {/* Recent Summaries Widget */}
-                        <div className="rounded-3xl border border-violet-100 bg-white/80 p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+                        <SectionCard className="p-8">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
-                                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                                         Recent Summaries
                                     </h2>
+                                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        Quick access to your latest processed documents
+                                    </p>
                                 </div>
                                 <Link
                                     href="/history"
-                                    className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-violet-600 outline-none transition-colors hover:text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:text-violet-400"
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-violet-50 px-3.5 py-2 text-xs font-semibold text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20"
                                 >
                                     View all
                                     <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -590,60 +385,59 @@ export default function Dashboard({ user, userStats, recentSummaries, adminStats
                             </div>
 
                             {!recentSummaries || recentSummaries.length === 0 ? (
-                                <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-8 text-center dark:border-white/10">
-                                    <FileText className="h-8 w-8 text-slate-400 dark:text-slate-600" aria-hidden="true" />
-                                    <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-                                        No recent summaries
-                                    </p>
-                                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                                        Upload your first PDF to generate a summary.
+                                <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-10 text-center dark:border-slate-800">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                                        <Upload className="h-6 w-6" aria-hidden="true" />
+                                    </div>
+                                    <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white">
+                                        No summaries yet
+                                    </h3>
+                                    <p className="mt-1 max-w-xs text-xs text-slate-500 dark:text-slate-400">
+                                        Upload your first PDF document to get instant AI key takeaways.
                                     </p>
                                     <Link
                                         href="/"
-                                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-600/20 transition-all hover:bg-violet-700"
+                                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/20 transition-all hover:scale-105"
                                     >
-                                        <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-                                        Summarize PDF
+                                        <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Summarize PDF Now
                                     </Link>
                                 </div>
                             ) : (
-                                <div className="mt-6 space-y-3">
+                                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     {recentSummaries.map((item) => (
                                         <div
                                             key={item.id}
-                                            className="group flex flex-col justify-between gap-3 rounded-2xl border border-violet-100 bg-white/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-200 hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:hover:border-violet-500/30 sm:flex-row sm:items-center"
+                                            className="group flex flex-col justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:-translate-y-0.5 hover:border-violet-200 hover:bg-white hover:shadow-lg dark:border-white/5 dark:bg-white/5 dark:hover:border-violet-500/30"
                                         >
-                                            <div className="flex items-start gap-3">
-                                                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                                                    <FileText className="h-5 w-5" aria-hidden="true" />
-                                                </span>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                            <div>
+                                                <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                                                    <FileText className="h-4 w-4 flex-none" />
+                                                    <h3 className="truncate text-xs font-bold text-slate-900 dark:text-white">
                                                         {item.filename}
-                                                    </p>
-                                                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-                                                        {item.summary}
-                                                    </p>
+                                                    </h3>
                                                 </div>
+                                                <p className="mt-2 line-clamp-3 text-xs text-slate-500 dark:text-slate-400">
+                                                    {item.summary}
+                                                </p>
                                             </div>
-                                            <div className="flex flex-none items-center gap-3">
-                                                <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                                                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-400 dark:border-white/5">
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
                                                     {formatDate(item.created_at)}
                                                 </span>
                                                 <Link
                                                     href="/history"
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-xs font-semibold text-violet-600 transition-colors hover:bg-violet-50 dark:border-white/10 dark:bg-white/5 dark:text-violet-400 dark:hover:bg-white/10"
+                                                    className="font-semibold text-violet-600 hover:underline dark:text-violet-400"
                                                 >
                                                     Read
-                                                    <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                                                 </Link>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
-                        </div>
+                        </SectionCard>
                     </>
                 )}
             </div>
