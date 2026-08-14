@@ -3,125 +3,60 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plan;
+use App\Services\StripeSubscriptionService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
-use Stripe\Checkout\Session;
-use Stripe\Stripe;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class SubscriptionController extends Controller
 {
-    public function __construct()
-    {
-        Stripe::setApiKey(config('services.stripe.secret'));
-    }
+    public function __construct(protected StripeSubscriptionService $stripeService) {}
 
-    public function createPaymentIntent(Request $request)
+    /**
+     * Create a Stripe PaymentIntent for inline payment form.
+     */
+    public function createPaymentIntent(Request $request): JsonResponse
     {
-        Log::info('createPaymentIntent', ['request' => $request->all()]);
-        
         $request->validate([
-            'plan_slug' => 'required|string',
+            'plan_slug' => ['required', 'string'],
+            'amount' => ['nullable', 'numeric'],
         ]);
 
         try {
             $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
             $user = $request->user();
 
-            if (!$user->stripe_customer_id)
-            {
-                $customer = $stripe->customers->create([
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'metadata' => [
-                        'user_id' => $user->id,
-                    ],
-                ]);
-                $user->update([
-                    'stripe_customer_id' => $customer->id,
-                ]);
-            } else {
-                $customer = $stripe->customers->retrieve($user->stripe_customer_id);
-            }
+            $result = $this->stripeService->createPaymentIntent($user, $plan, $request->input('amount'));
 
-            $amount = (int) round((float) ($request->input('amount') ?: $plan->price * 100));
-
-            $paymentIntent = $stripe->paymentIntents->create([
-                'amount' => $amount,
-                'currency' => 'usd',
-                'customer' => $customer->id,
-                'payment_method_types' => ['card'],
-                'metadata' => [
-                    'user_id' => $user->id,
-                    'plan_slug' => $request->plan_slug,
-                ],
-            ]);
-
-            return  response()->json([
-                'clientSecret' => $paymentIntent->client_secret,
-            ]);
+            return response()->json($result);
         } catch (\Exception $e) {
-            Log::error('createPaymentIntent', ['error' => $e->getMessage()]);
+            Log::error('createPaymentIntent error: '.$e->getMessage());
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
-
     }
 
-    public function subscribe(Request $request, $slug)
+    /**
+     * Create a Stripe Checkout Session for subscription purchase.
+     */
+    public function createCheckoutSession(Request $request, string $plan_slug): JsonResponse|SymfonyResponse|RedirectResponse
     {
-        Log::info('subscribe', ['request' => $request->all()]);
-
-        $request->validate([
-            'stripeToken' => 'required|string',
-        ]);
-        $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
-        $user = $request->user();
-
         try {
-            $sessionData = [
-                'payment_method_types' => ['card'],
-                'line_items' => [
-                    [
-                        'price_data' => [
-                            'currency' => 'usd',
-                            'unit_amount' => $plan->price * 100,
-                            'product_data' => [
-                                'name' => $plan->name,
-                                'description' => $plan->description,
-                            ],
-                            'recurring' => [
-                                'interval' => 'month',
-                            ],
-                        ],
-                        'quantity' => 1,
-                    ],
-                ],
-                'mode' => 'subscription',
-                'success_url' => route('subscription.success') . '?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('checkout', ['plan_slug' => $plan->slug]),
-                'metadata' => [
-                    'plan_id' => $plan->id,
-                ],
-            ];
+            $plan = Plan::where('slug', $plan_slug)->where('is_active', true)->firstOrFail();
+            $user = $request->user();
 
-            if ($user) {
-                $sessionData['customer_email'] = $user->email;
-                $sessionData['client_reference_id'] = $user->id;
-                $sessionData['metadata']['user_id'] = $user->id;
-            }
-
-            $session = Session::create($sessionData);
-
-            Log::info('createCheckoutSession', ['sessionId' => $session->id, 'url' => $session->url]);
+            $checkoutUrl = $this->stripeService->createCheckoutSession($user, $plan);
 
             if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
-                return response()->json(['url' => $session->url]);
+                return response()->json(['url' => $checkoutUrl]);
             }
 
-            return Inertia::location($session->url);
+            return Inertia::location($checkoutUrl);
         } catch (\Exception $e) {
-            Log::error('createCheckoutSession', ['error' => $e->getMessage()]);
+            Log::error('createCheckoutSession error: '.$e->getMessage());
 
             if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
                 return response()->json(['error' => $e->getMessage()], 500);
@@ -131,157 +66,74 @@ class SubscriptionController extends Controller
         }
     }
 
-    public  function createCheckoutSession(Request $request)
-    {   
-        Log::info('createCheckoutSession', ['request' => $request->all()]);
-        $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
-        $user = $request->user();
-        
-        try{
-            $session = Session::create([
-                'payment_method_types' => ['card'],
-                'line_items' => [
-                    [
-                        'price_data' => [
-                            'currency' => 'usd',
-                            'unit_amount' => $plan->price * 100,
-                            'product_data' => [
-                                'name' => $plan->name,
-                                'description' => $plan->description,
-                            ],
-                            'recurring' => [
-                                'interval' => 'month',
-                            ],
-                        ],
-                        'quantity' => 1,
-                    ],
-                ],
-                'mode' => 'subscription',
-                'success_url' => route('subscription.success') . '?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('checkout', ['plan_slug' => $plan->slug]),
-                'client_reference_id' => $user->id,
-                'metadata' => [
-                    'user_id' => $user->id,
-                    'plan_id' => $plan->id,
-                ],
-            ]);
-            if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
-                return response()->json(['url' => $session->url]);
-            }
-
-            return Inertia::location($session->url);
-        
-        } catch (\Exception $e) {
-            Log::error('createCheckoutSession', ['error' => $e->getMessage()]);
-            return redirect()->back()->with('error', $e->getMessage());
-        }
+    /**
+     * Legacy subscribe endpoint handler.
+     */
+    public function subscribe(Request $request, string $plan_slug): JsonResponse|SymfonyResponse|RedirectResponse
+    {
+        return $this->createCheckoutSession($request, $plan_slug);
     }
 
-    public function success(Request $request)
+    /**
+     * Handle Stripe Checkout successful redirect.
+     */
+    public function success(Request $request): RedirectResponse
     {
-        Log::info('success', ['request' => $request->all()]);
-        $sessionId =  $request->get('session_id') ?? $request->session_id;
+        $sessionId = $request->get('session_id') ?? $request->input('session_id');
 
-        if(!$sessionId)
-        {
+        if (! $sessionId) {
             return redirect()->route('dashboard')->with('error', 'Something went wrong.');
         }
 
         try {
-            $session = Session::retrieve($sessionId);
             $user = $request->user();
-
-            $user->update([
-                'plan_id' => $session->metadata->plan_id,
-                'stripe_subscription_id' => $session->customer,
-                'pdf_count' => 0,
-                'pdf_count_reset_at' => now()->addDays(30),
-                'subscription_ends_at' => now()->addMonths(),
-            ]);
+            $this->stripeService->handleSuccess($user, $sessionId);
 
             return redirect()->route('dashboard')->with('success', 'You have successfully subscribed to the plan.');
-        
+        } catch (\Exception $e) {
+            Log::error('Subscription success callback error: '.$e->getMessage());
 
+            return redirect()->route('dashboard')->with('error', 'Failed to activate subscription.');
         }
-        catch (\Exception $e) {
-            Log::error('success', ['error' => $e->getMessage()]);
-            return redirect()->route('dashboard')->with('error' , 'Failed to active subscription.');
-        }
-       
     }
 
-    public function cancel(Request $request)
+    /**
+     * Cancel an active user subscription.
+     */
+    public function cancel(Request $request): RedirectResponse
     {
-        Log::info('cancel', ['request' => $request->all()]);
-        $user = $request->user();
-        
-        if(!$user->stripe_subscription_id)
-        {
-            return redirect()->route('dashboard')->with('error', 'Something went wrong.');
-        }
-
         try {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            $stripe->subscriptions->cancel($user->stripe_subscription_id);
-            $user->update([
-                'subscription_ends_at' => now()->addDays(30),
-                
-            ]);
+            $user = $request->user();
+            $this->stripeService->cancelSubscription($user);
+
             return back()->with('success', 'You have successfully canceled your subscription.');
         } catch (\Exception $e) {
-            Log::error('cancel', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Something went wrong.');
+            Log::error('Subscription cancel error: '.$e->getMessage());
+
+            return back()->with('error', $e->getMessage() ?: 'Something went wrong.');
         }
     }
 
-    public function changePlan(Request $request)
+    /**
+     * Change user subscription to another plan.
+     */
+    public function changePlan(Request $request): RedirectResponse
     {
-        Log::info('changePlan', ['request' => $request->all()]);
         $request->validate([
-            'plan_slug' => 'required|exists:plans,slug',
+            'plan_slug' => ['required', 'exists:plans,slug'],
         ]);
-        $user = $request->user();
-        $newplan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
-
-        if(!$user->stripe_subscription_id)
-        {
-            return redirect()->route('dashboard')->with('error', 'No active subscription found.');
-        }
 
         try {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            $stripe->subscriptions->update($user->stripe_subscription_id, [
-                'items' => [
-                    [
-                        'id' => $user->stripe_subscription_id,
-                        'price_data' => [
-                            'currency' => 'usd',
-                            'unit_amount' => $newplan->price * 100,
-                            'product_data' => [
-                                'name' => $newplan->name . ' Plan',
-                                'description' => $newplan->description,
-                            ],
-                            'recurring' => [
-                                'interval' => 'month',
-                            ],
-                        ],
-                    ],
-                ],
-                'proration_behavior' => 'create_prorations',
-            ]);
-            $user->update([
-                'plan_id' => $newplan->id,
-                'pdf_count' => 0,
-                'pdf_count_reset_at' => now()->addDays(30),
-                'subscription_ends_at' => now()->addMonths(),
-            ]);
+            $user = $request->user();
+            $newPlan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
+
+            $this->stripeService->changePlan($user, $newPlan);
+
             return back()->with('success', 'You have successfully changed your plan.');
         } catch (\Exception $e) {
-            Log::error('changePlan', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Something went wrong.');
-        }
-        
-        
-    }
+            Log::error('Subscription changePlan error: '.$e->getMessage());
 
+            return back()->with('error', $e->getMessage() ?: 'Something went wrong.');
+        }
+    }
 }

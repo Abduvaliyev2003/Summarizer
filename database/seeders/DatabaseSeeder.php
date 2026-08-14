@@ -17,14 +17,14 @@ class DatabaseSeeder extends Seeder
 
         $this->call(PlanSeeder::class);
 
-       User::create([
+        User::create([
             'name' => 'Admin',
             'email' => 'TbW4w@example.com',
             'password' => bcrypt('password'),
             'role' => 'admin',
-       ]);
+        ]);
 
-       User::create([
+        User::create([
             'name' => 'User',
             'email' => 'Oj3o6@example.com',
             'password' => bcrypt('password'),
@@ -32,6 +32,6 @@ class DatabaseSeeder extends Seeder
             'plan_id' => 1,
             'pdf_count' => 3,
             'pdf_count_reset_at' => now()->addDays(30),
-         ]);
+        ]);
     }
 }

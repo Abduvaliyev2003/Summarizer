@@ -45,7 +45,7 @@ class User extends Authenticatable
         parent::boot();
 
         static::creating(function ($user) {
-            if (!$user->plan_id) {
+            if (! $user->plan_id) {
                 $freePlan = Plan::where('slug', 'free')->first();
 
                 if ($freePlan) {
@@ -69,7 +69,7 @@ class User extends Authenticatable
 
     public function canSummarizePdf(): bool
     {
-        if (!$this->plan) {
+        if (! $this->plan) {
             return false;
         }
 
@@ -101,7 +101,7 @@ class User extends Authenticatable
 
     public function hasActiveSubscription(): bool
     {
-        if (!$this->stripe_subscription_id) {
+        if (! $this->stripe_subscription_id) {
             return false;
         }
 
@@ -117,6 +117,6 @@ class User extends Authenticatable
 
     public function canChangePlan(): bool
     {
-        return !$this->hasActiveSubscription();
+        return ! $this->hasActiveSubscription();
     }
 }

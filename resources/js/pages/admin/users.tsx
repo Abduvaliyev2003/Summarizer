@@ -95,7 +95,7 @@ export default function UsersIndex({ users, plans, stats }: Props) {
     const handlePlanChange = (userId: number, newPlanId: number) => {
         setChangingUserPlanId(userId);
         router.post(
-            `/admin/users/${userId}/change-plan`,
+            `/admin/users/${userId}/plan`,
             { plan_id: newPlanId },
             {
                 preserveScroll: true,

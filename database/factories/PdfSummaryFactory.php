@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\PdfSummary;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +19,10 @@ class PdfSummaryFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'user_id' => User::factory(),
+            'filename' => fake()->word().'.pdf',
+            'summary' => fake()->paragraph(),
+            'file_size' => fake()->numberBetween(1024, 1048576),
         ];
     }
 }

@@ -2,65 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StorePdfSummaryRequest;
-use App\Http\Requests\UpdatePdfSummaryRequest;
-use App\Models\PdfSummary;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class PdfSummaryController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of user PDF summaries (history page).
      */
-    public function index()
+    public function index(Request $request): Response
     {
-        //
-    }
+        $user = $request->user();
+        $summaries = $user->pdfSummaries()->latest()->paginate(10);
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(StorePdfSummaryRequest $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(PdfSummary $pdfSummary)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(PdfSummary $pdfSummary)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(UpdatePdfSummaryRequest $request, PdfSummary $pdfSummary)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(PdfSummary $pdfSummary)
-    {
-        //
+        return Inertia::render('history', [
+            'summaries' => $summaries,
+        ]);
     }
 }

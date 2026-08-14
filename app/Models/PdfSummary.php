@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Database\Factories\PdfSummaryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class PdfSummary extends Model
 {
-    /** @use HasFactory<\Database\Factories\PdfSummaryFactory> */
+    /** @use HasFactory<PdfSummaryFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -21,6 +22,4 @@ class PdfSummary extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-    
 }
