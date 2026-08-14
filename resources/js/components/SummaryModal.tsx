@@ -1,6 +1,7 @@
 import { X, CheckCircle2, Copy, Download, FileText } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { useRef, useState } from 'react';
+import StudySuiteViewer from '@/components/StudySuiteViewer';
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -267,7 +268,9 @@ export default function SummaryModal({
                                 <FileText className="h-5 w-5 text-violet-600" />
 
                                 <h3 className="text-xl font-semibold text-slate-900">
-                                    Summary
+                                    {summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===')
+                                        ? '🎓 Student Study Suite'
+                                        : 'Summary'}
                                 </h3>
                             </div>
 
@@ -276,16 +279,20 @@ export default function SummaryModal({
                             </p>
                         </div>
 
-                        <div className="space-y-3">
-                            {summary.split('\n').map((line, index) => (
-                                <p
-                                    key={index}
-                                    className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
-                                >
-                                    {line || '\u00A0'}
-                                </p>
-                            ))}
-                        </div>
+                        {summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===') || summary.includes('=== KEY CONCEPTS ===') ? (
+                            <StudySuiteViewer rawContent={summary} />
+                        ) : (
+                            <div className="space-y-3">
+                                {summary.split('\n').map((line, index) => (
+                                    <p
+                                        key={index}
+                                        className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
+                                    >
+                                        {line || '\u00A0'}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -20,6 +20,7 @@ import {
     ShieldCheck,
     Clock,
     Lock,
+    Globe,
 } from 'lucide-react';
 
 import FlashMessage from '@/components/FlashMessage';
@@ -68,7 +69,8 @@ type SummaryType =
     | 'default'
     | 'points'
     | 'highlight'
-    | 'detailed';
+    | 'detailed'
+    | 'quiz';
 
 export default function Welcome({
     plans,
@@ -253,12 +255,27 @@ export default function Welcome({
     |--------------------------------------------------------------------------
     */
 
+    const [inputMode, setInputMode] = useState<'file' | 'url'>('file');
+    const [pdfUrl, setPdfUrl] = useState('');
+
     const handleSummaryTypeSelect = async (
-        summaryType: SummaryType
+        summaryType: SummaryType,
+        targetLanguage: string = 'uz'
     ) => {
         setShowSummaryOptionsModal(false);
 
-        if (!selectedFile || !auth?.user) {
+        if (!auth?.user) {
+            router.visit('/login');
+            return;
+        }
+
+        if (inputMode === 'url' && !pdfUrl.trim()) {
+            alert('Please enter a valid PDF URL.');
+            return;
+        }
+
+        if (inputMode === 'file' && !selectedFile) {
+            alert('Please select a PDF file first.');
             return;
         }
 
@@ -269,8 +286,14 @@ export default function Welcome({
 
         const formData = new FormData();
 
-        formData.append('pdf', selectedFile);
+        if (inputMode === 'url' && pdfUrl.trim()) {
+            formData.append('pdf_url', pdfUrl.trim());
+        } else if (selectedFile) {
+            formData.append('pdf', selectedFile, selectedFile.name);
+        }
+
         formData.append('summary_type', summaryType);
+        formData.append('target_language', targetLanguage);
 
         const progressInterval = window.setInterval(() => {
             setProgress((prev) =>
@@ -716,89 +739,166 @@ export default function Welcome({
                                 Choose the summary style that works best for you.
                             </p>
 
-                            {/* Upload card */}
+                            {/* Upload card & Mode Switcher */}
                             <div className="mx-auto mt-10 max-w-3xl">
-                                <div
-                                    onDragOver={
-                                        handleDragOver
-                                    }
-                                    onDragLeave={
-                                        handleDragLeave
-                                    }
-                                    onDrop={
-                                        handleDrop
-                                    }
-                                    onClick={
-                                        openFilePicker
-                                    }
-                                    className={`
-                                        group cursor-pointer rounded-3xl border-2 border-dashed p-8 transition-all duration-300 sm:p-12
+                                {/* Mode Switcher Tabs */}
+                                <div className="mb-6 inline-flex rounded-2xl bg-slate-200/70 p-1.5 backdrop-blur-md dark:bg-slate-800/70">
+                                    <button
+                                        type="button"
+                                        onClick={() => setInputMode('file')}
+                                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+                                            inputMode === 'file'
+                                                ? 'bg-white text-violet-600 shadow-md dark:bg-slate-900 dark:text-violet-400'
+                                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <FileText className="h-4 w-4" />
+                                        Upload PDF File
+                                    </button>
 
-                                        ${
-                                            isDragging
-                                                ? 'scale-[1.01] border-violet-500 bg-violet-50 dark:bg-violet-500/10'
-                                                : 'border-slate-300 bg-white/80 hover:border-violet-400 hover:bg-violet-50/40 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-violet-500'
-                                        }
-
-                                        ${
-                                            limitReached
-                                                ? 'cursor-not-allowed opacity-70'
-                                                : ''
-                                        }
-                                    `}
-                                >
-                                    <input
-                                        ref={
-                                            fileInputRef
-                                        }
-                                        type="file"
-                                        accept=".pdf,application/pdf"
-                                        onChange={
-                                            handleFileChange
-                                        }
-                                        className="hidden"
-                                    />
-
-                                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 transition-transform duration-300 group-hover:scale-105 dark:bg-violet-500/10">
-                                        <Upload className="h-8 w-8 text-violet-600 dark:text-violet-400" />
-                                    </div>
-
-                                    <h2 className="mt-6 text-xl font-bold text-slate-900 dark:text-white">
-                                        {limitReached
-                                            ? 'Upload limit reached'
-                                            : 'Upload your PDF'}
-                                    </h2>
-
-                                    <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
-                                        {limitReached
-                                            ? 'Upgrade your plan to upload more documents.'
-                                            : 'Drag and drop your PDF here, or click to browse from your device.'}
-                                    </p>
-
-                                    {!limitReached && (
-                                        <div className="mt-6 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition group-hover:bg-violet-700">
-                                            <FileText className="h-4 w-4" />
-                                            Choose PDF
-                                        </div>
-                                    )}
-
-                                    <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
-                                        <span className="flex items-center gap-1.5">
-                                            <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                            PDF only
-                                        </span>
-
-                                        <span className="flex items-center gap-1.5">
-                                            <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                            Max 20 MB
-                                        </span>
-
-                                        <span className="flex items-center gap-1.5">
-                                            <Lock className="h-3.5 w-3.5" />
-                                            Secure processing
-                                        </span>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setInputMode('url')}
+                                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+                                            inputMode === 'url'
+                                                ? 'bg-white text-indigo-600 shadow-md dark:bg-slate-900 dark:text-indigo-400'
+                                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <Globe className="h-4 w-4" />
+                                        Paste PDF Link (URL)
+                                    </button>
                                 </div>
+
+                                {inputMode === 'file' ? (
+                                    <div
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        onClick={openFilePicker}
+                                        className={`
+                                            group cursor-pointer rounded-3xl border-2 border-dashed p-8 transition-all duration-300 sm:p-12
+
+                                            ${
+                                                isDragging
+                                                    ? 'scale-[1.01] border-violet-500 bg-violet-50 dark:bg-violet-500/10'
+                                                    : 'border-slate-300 bg-white/80 hover:border-violet-400 hover:bg-violet-50/40 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-violet-500'
+                                            }
+
+                                            ${limitReached ? 'cursor-not-allowed opacity-70' : ''}
+                                        `}
+                                    >
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept=".pdf,application/pdf"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                        />
+
+                                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 transition-transform duration-300 group-hover:scale-105 dark:bg-violet-500/10">
+                                            <Upload className="h-8 w-8 text-violet-600 dark:text-violet-400" />
+                                        </div>
+
+                                        <h2 className="mt-6 text-xl font-bold text-slate-900 dark:text-white">
+                                            {limitReached ? 'Upload limit reached' : 'Upload your PDF'}
+                                        </h2>
+
+                                        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+                                            {limitReached
+                                                ? 'Upgrade your plan to upload more documents.'
+                                                : 'Drag and drop your PDF here, or click to browse from your device.'}
+                                        </p>
+
+                                        {!limitReached && (
+                                            <div className="mt-6 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition group-hover:bg-violet-700">
+                                                <FileText className="h-4 w-4" />
+                                                Choose PDF
+                                            </div>
+                                        )}
+
+                                        <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
+                                            <span className="flex items-center gap-1.5">
+                                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                PDF only
+                                            </span>
+
+                                            <span className="flex items-center gap-1.5">
+                                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                Max 20 MB
+                                            </span>
+
+                                            <span className="flex items-center gap-1.5">
+                                                <Lock className="h-3.5 w-3.5" />
+                                                Secure processing
+                                            </span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/80 sm:p-12">
+                                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-500/10">
+                                            <Globe className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+                                        </div>
+
+                                        <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
+                                            Paste Direct PDF Link (URL)
+                                        </h2>
+
+                                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                            Paste any public web link ending in .pdf to summarize it without downloading
+                                        </p>
+
+                                        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                                            <input
+                                                type="url"
+                                                value={pdfUrl}
+                                                onChange={(e) => setPdfUrl(e.target.value)}
+                                                placeholder="https://example.com/document.pdf"
+                                                className="w-full flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                                            />
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!isAuthenticated) {
+                                                        router.visit('/login');
+                                                        return;
+                                                    }
+                                                    if (limitReached) {
+                                                        alert('You have reached your upload limit. Please upgrade your plan.');
+                                                        return;
+                                                    }
+                                                    if (!pdfUrl.trim() || !pdfUrl.startsWith('http')) {
+                                                        alert('Please enter a valid HTTP/HTTPS PDF URL.');
+                                                        return;
+                                                    }
+                                                    setShowSummaryOptionsModal(true);
+                                                }}
+                                                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:from-violet-700 hover:to-indigo-700"
+                                            >
+                                                <Sparkles className="h-4 w-4" />
+                                                Summarize Link
+                                            </button>
+                                        </div>
+
+                                        <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
+                                            <span className="flex items-center gap-1.5">
+                                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                Direct PDF URL
+                                            </span>
+
+                                            <span className="flex items-center gap-1.5">
+                                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                Auto Language Target
+                                            </span>
+
+                                            <span className="flex items-center gap-1.5">
+                                                <Lock className="h-3.5 w-3.5" />
+                                                Instant fetch
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* User stats */}

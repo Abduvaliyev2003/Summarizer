@@ -11,37 +11,52 @@ use RuntimeException;
 class PDFSummarizeController extends Controller
 {
     /**
-     * Handle PDF document upload and summary generation.
+     * Handle PDF document upload or PDF URL submission and generate summary.
      */
     public function summarize(Request $request, PdfSummarizerService $summarizerService): JsonResponse
     {
         $file = $request->file('pdf');
+        $hasFileAttempt = $file !== null || isset($_FILES['pdf']);
+        $hasUrl = filled($request->input('pdf_url'));
 
-        if (! $file || ! $file->isValid()) {
-            $errorCode = $file?->getError() ?? ($_FILES['pdf']['error'] ?? null);
-            $message = 'The PDF failed to upload. Please try again.';
+        if (! $hasFileAttempt && ! $hasUrl) {
+            return response()->json(['message' => 'Please upload a PDF file or provide a valid PDF link (URL).'], 422);
+        }
 
-            if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
-                $message = 'The PDF file is too large. Please upload a file smaller than 20 MB.';
-            } elseif ($errorCode === UPLOAD_ERR_PARTIAL) {
-                $message = 'The PDF was only partially uploaded. Please try again.';
-            } elseif ($errorCode === UPLOAD_ERR_NO_FILE) {
-                $message = 'No PDF file was uploaded. Please select a PDF file and try again.';
+        if ($hasFileAttempt) {
+            if (! $file || ! $file->isValid()) {
+                $errorCode = $file?->getError() ?? ($_FILES['pdf']['error'] ?? null);
+                $message = 'The PDF failed to upload. Please try again.';
+
+                if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
+                    $message = 'The PDF file is too large for the server upload limit. Please select a smaller PDF file.';
+                } elseif ($errorCode === UPLOAD_ERR_PARTIAL) {
+                    $message = 'The PDF was only partially uploaded. Please try again.';
+                } elseif ($errorCode === UPLOAD_ERR_NO_FILE) {
+                    $message = 'No PDF file was uploaded. Please select a PDF file and try again.';
+                }
+
+                return response()->json(['message' => $message], 422);
             }
-
-            return response()->json(['message' => $message], 422);
         }
 
         $request->validate([
-            'pdf' => ['required', 'mimetypes:application/pdf', 'max:20480'],
-            'summary_type' => ['nullable', 'string', 'in:default,points,highlight,detailed'],
+            'pdf' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
+            'pdf_url' => ['nullable', 'url'],
+            'summary_type' => ['nullable', 'string', 'in:default,points,highlight,detailed,quiz'],
+            'target_language' => ['nullable', 'string', 'in:uz,en,ru,de,es,fr,tr'],
         ]);
 
         $user = $request->user();
         $summaryType = $request->input('summary_type', 'default');
+        $targetLanguage = $request->input('target_language', 'en');
 
         try {
-            $result = $summarizerService->summarize($file, $user, $summaryType);
+            if ($hasUrl && ! $file) {
+                $result = $summarizerService->summarizeFromUrl($request->input('pdf_url'), $user, $summaryType, $targetLanguage);
+            } else {
+                $result = $summarizerService->summarize($file, $user, $summaryType, $targetLanguage);
+            }
 
             return response()->json($result);
         } catch (InvalidArgumentException $e) {
@@ -51,7 +66,7 @@ class PDFSummarizeController extends Controller
 
             return response()->json(['message' => $e->getMessage()], $status);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Failed to generate summary. Please try again later.'], 500);
+            return response()->json(['message' => 'Failed to generate summary: '.$e->getMessage()], 500);
         }
     }
 }

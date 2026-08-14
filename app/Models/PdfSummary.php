@@ -15,6 +15,8 @@ class PdfSummary extends Model
         'user_id',
         'filename',
         'summary',
+        'target_language',
+        'source_url',
         'file_size',
     ];
 

@@ -7,6 +7,8 @@ import {
     Lock,
     Sparkles,
     ArrowRight,
+    Globe,
+    GraduationCap,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,15 +16,26 @@ type SummaryType =
     | 'default'
     | 'points'
     | 'highlight'
-    | 'detailed';
+    | 'detailed'
+    | 'quiz';
 
 interface SummaryOptionsModalProps {
     show: boolean;
     fileName?: string;
     userPlanSlug: string;
     onClose: () => void;
-    onSelect: (type: SummaryType) => void;
+    onSelect: (type: SummaryType, targetLanguage: string) => void;
 }
+
+const languages = [
+    { code: 'uz', name: "O'zbekcha", flag: '🇺🇿' },
+    { code: 'en', name: 'English', flag: '🇬🇧' },
+    { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
+];
 
 const summaryOptions = [
     {
@@ -32,6 +45,15 @@ const summaryOptions = [
         description:
             'A concise and easy-to-read summary of your document.',
         color: 'violet',
+        requiredPlan: 'free',
+    },
+    {
+        type: 'quiz' as const,
+        icon: GraduationCap,
+        title: '🎓 Student Study Suite',
+        description:
+            'Key concepts, interactive exam quizzes, and study flashcards.',
+        color: 'purple',
         requiredPlan: 'free',
     },
     {
@@ -77,24 +99,26 @@ const colorClasses: Record<
         hover: string;
     }
 > = {
+    purple: {
+        icon: 'text-purple-600 dark:text-purple-400',
+        iconBg: 'bg-purple-100 dark:bg-purple-500/10',
+        hover: 'hover:border-purple-300 hover:bg-purple-50/50 dark:hover:border-purple-500/40 dark:hover:bg-purple-500/5',
+    },
     violet: {
         icon: 'text-violet-600 dark:text-violet-400',
         iconBg: 'bg-violet-100 dark:bg-violet-500/10',
         hover: 'hover:border-violet-300 hover:bg-violet-50/50 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/5',
     },
-
     blue: {
         icon: 'text-blue-600 dark:text-blue-400',
         iconBg: 'bg-blue-100 dark:bg-blue-500/10',
         hover: 'hover:border-blue-300 hover:bg-blue-50/50 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/5',
     },
-
     amber: {
         icon: 'text-amber-600 dark:text-amber-400',
         iconBg: 'bg-amber-100 dark:bg-amber-500/10',
         hover: 'hover:border-amber-300 hover:bg-amber-50/50 dark:hover:border-amber-500/40 dark:hover:bg-amber-500/5',
     },
-
     emerald: {
         icon: 'text-emerald-600 dark:text-emerald-400',
         iconBg: 'bg-emerald-100 dark:bg-emerald-500/10',
@@ -109,32 +133,27 @@ export default function SummaryOptionsModal({
     onClose,
     onSelect,
 }: SummaryOptionsModalProps) {
-    const [selectedType, setSelectedType] =
-        useState<SummaryType | null>(null);
+    const [selectedType, setSelectedType] = useState<SummaryType | null>(null);
+    const [targetLanguage, setTargetLanguage] = useState<string>('uz');
 
     if (!show) {
         return null;
     }
 
-    const userLevel =
-        planHierarchy[userPlanSlug] ?? planHierarchy.free;
+    const userLevel = planHierarchy[userPlanSlug] ?? planHierarchy.free;
 
     const canAccess = (requiredPlan: string) => {
-        const requiredLevel =
-            planHierarchy[requiredPlan] ?? planHierarchy.free;
-
+        const requiredLevel = planHierarchy[requiredPlan] ?? planHierarchy.free;
         return userLevel >= requiredLevel;
     };
 
-    const handleClick = (
-        option: (typeof summaryOptions)[number]
-    ) => {
+    const handleClick = (option: (typeof summaryOptions)[number]) => {
         if (!canAccess(option.requiredPlan)) {
             return;
         }
 
         setSelectedType(option.type);
-        onSelect(option.type);
+        onSelect(option.type, targetLanguage);
     };
 
     return (
@@ -158,7 +177,7 @@ export default function SummaryOptionsModal({
                                 id="summary-options-title"
                                 className="text-lg font-semibold text-slate-900 dark:text-white"
                             >
-                                Choose Summary Type
+                                Choose Summary Options
                             </h2>
 
                             <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
@@ -179,13 +198,44 @@ export default function SummaryOptionsModal({
 
                 {/* Content */}
                 <div className="min-h-0 overflow-y-auto p-6 sm:p-8">
+
+                    {/* Language Selection Bar */}
+                    <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <Globe className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                                <div>
+                                    <label htmlFor="target-language-select" className="text-sm font-semibold text-slate-900 dark:text-white">
+                                        Summary Language
+                                    </label>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Choose the language for the output summary
+                                    </p>
+                                </div>
+                            </div>
+
+                            <select
+                                id="target-language-select"
+                                value={targetLanguage}
+                                onChange={(e) => setTargetLanguage(e.target.value)}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                            >
+                                {languages.map((lang) => (
+                                    <option key={lang.code} value={lang.code}>
+                                        {lang.flag} {lang.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="mb-6">
                         <h3 className="text-sm font-medium text-slate-900 dark:text-white">
-                            Select how you want your document summarized
+                            Select Summary Format
                         </h3>
 
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                            Choose the format that best fits your needs.
+                            Choose how detailed or bulleted you want your summary to be.
                         </p>
                     </div>
 
@@ -193,23 +243,15 @@ export default function SummaryOptionsModal({
                     <div className="grid gap-4 sm:grid-cols-2">
                         {summaryOptions.map((option) => {
                             const Icon = option.icon;
-
-                            const isSelected =
-                                selectedType === option.type;
-
-                            const isLocked =
-                                !canAccess(option.requiredPlan);
-
-                            const colors =
-                                colorClasses[option.color];
+                            const isSelected = selectedType === option.type;
+                            const isLocked = !canAccess(option.requiredPlan);
+                            const colors = colorClasses[option.color];
 
                             return (
                                 <button
                                     key={option.type}
                                     type="button"
-                                    onClick={() =>
-                                        handleClick(option)
-                                    }
+                                    onClick={() => handleClick(option)}
                                     disabled={isLocked}
                                     className={`
                                         group relative flex w-full
@@ -242,9 +284,7 @@ export default function SummaryOptionsModal({
                                             ${colors.iconBg}
                                         `}
                                     >
-                                        <Icon
-                                            className={`h-5 w-5 ${colors.icon}`}
-                                        />
+                                        <Icon className={`h-5 w-5 ${colors.icon}`} />
                                     </div>
 
                                     {/* Text */}
@@ -281,9 +321,7 @@ export default function SummaryOptionsModal({
                                                 `}
                                             >
                                                 {isLocked
-                                                    ? `${capitalize(
-                                                          option.requiredPlan
-                                                      )} plan`
+                                                    ? `${capitalize(option.requiredPlan)} plan`
                                                     : 'Available'}
                                             </span>
                                         </div>
@@ -306,27 +344,6 @@ export default function SummaryOptionsModal({
                             );
                         })}
                     </div>
-
-                    {/* Upgrade message */}
-                    {summaryOptions.some(
-                        (option) =>
-                            !canAccess(option.requiredPlan)
-                    ) && (
-                        <div className="mt-6 flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-500/20 dark:bg-violet-500/5">
-                            <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
-
-                            <div>
-                                <p className="text-sm font-medium text-violet-900 dark:text-violet-300">
-                                    Unlock more summary options
-                                </p>
-
-                                <p className="mt-1 text-sm text-violet-700 dark:text-violet-400">
-                                    Upgrade your plan to access advanced
-                                    summary formats and additional features.
-                                </p>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer */}
