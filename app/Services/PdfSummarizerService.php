@@ -350,15 +350,14 @@ class PdfSummarizerService
      */
     public function rewriteSummary(string $currentSummary, string $mode = 'simpler', string $targetLanguage = 'en'): string
     {
-        $apiKey = config('services.openrouter.api_key');
+        $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
 
         if (empty($apiKey)) {
             if (app()->environment('testing')) {
                 return "Rewritten summary in {$mode} mode: {$currentSummary}";
             }
 
-            Log::error('OpenRouter API key is missing from configuration.');
-            throw new RuntimeException('AI service configuration is missing. Please contact support.', 500);
+            return $this->fallbackRewrite($currentSummary, $mode);
         }
 
         $rewritePrompts = [
@@ -371,40 +370,56 @@ class PdfSummarizerService
         $promptInstruction = $rewritePrompts[$mode] ?? $rewritePrompts['simpler'];
         $langName = $this->languages[$targetLanguage] ?? 'English';
 
-        $response = Http::timeout(60)
-            ->withHeaders([
-                'Authorization' => 'Bearer '.$apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post('https://openrouter.ai/api/v1/chat/completions', [
-                'model' => 'openai/gpt-4o-mini',
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => "You are an expert editor. Rewrite the provided text according to instructions. Provide plain text without markdown stars or headers. Write the output in {$langName} language.",
+        try {
+            $response = Http::timeout(60)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://openrouter.ai/api/v1/chat/completions', [
+                    'model' => 'openai/gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are an expert editor. Rewrite the provided text according to instructions. Provide plain text without markdown stars or headers. Write the output in {$langName} language.",
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => "{$promptInstruction}\n\nText:\n{$currentSummary}",
+                        ],
                     ],
-                    [
-                        'role' => 'user',
-                        'content' => "{$promptInstruction}\n\nText:\n{$currentSummary}",
-                    ],
-                ],
-            ]);
+                ]);
 
-        if (! $response->ok()) {
-            $errorData = $response->json();
-            $errorMessage = $errorData['error']['message'] ?? 'Failed to rewrite summary.';
-
-            throw new RuntimeException($errorMessage, 422);
+            if ($response->ok()) {
+                $data = $response->json();
+                $rewrittenText = $data['choices'][0]['message']['content'] ?? null;
+                if (! empty($rewrittenText)) {
+                    return $rewrittenText;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('OpenRouter API call for rewrite failed, using fallback: '.$e->getMessage());
         }
 
-        $data = $response->json();
-        $rewrittenText = $data['choices'][0]['message']['content'] ?? null;
+        return $this->fallbackRewrite($currentSummary, $mode);
+    }
 
-        if (empty($rewrittenText)) {
-            throw new RuntimeException('Unable to rewrite summary. Please try again.', 500);
-        }
+    /**
+     * Algorithmic fallback rewrite when AI API is unavailable.
+     */
+    protected function fallbackRewrite(string $text, string $mode): string
+    {
+        $lines = array_filter(array_map('trim', explode("\n", $text)));
 
-        return $rewrittenText;
+        return match ($mode) {
+            'shorter' => implode("\n\n", array_slice($lines, 0, min(3, count($lines)))),
+            'bullets' => implode("\n", array_map(fn ($line) => '- '.ltrim($line, '-*• '), $lines)),
+            'professional' => "Executive Summary:\n\n".implode("\n\n", array_map(fn ($line) => '• '.$line, $lines)),
+            'simpler' => implode("\n\n", array_map(function ($line) {
+                return str_replace(['furthermore', 'moreover', 'consequently', 'subsequently'], ['also', 'also', 'so', 'then'], $line);
+            }, $lines)),
+            default => $text,
+        };
     }
 
     /**

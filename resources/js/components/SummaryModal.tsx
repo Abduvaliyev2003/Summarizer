@@ -42,11 +42,12 @@ export default function SummaryModal({
         setIsRewriting(true);
         setActiveMode(mode);
         try {
+            const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
             const response = await fetch('/pdf/rewrite', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                    'X-CSRF-TOKEN': token,
                     Accept: 'application/json',
                 },
                 body: JSON.stringify({
@@ -57,9 +58,12 @@ export default function SummaryModal({
             const data = await response.json();
             if (response.ok && data.summary) {
                 setDisplaySummary(data.summary);
+            } else {
+                alert(data.message || 'Failed to rewrite summary. Please try again.');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Failed to rewrite summary:', e);
+            alert(e.message || 'Failed to rewrite summary.');
         } finally {
             setIsRewriting(false);
             setActiveMode(null);
