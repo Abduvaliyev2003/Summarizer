@@ -16,28 +16,24 @@ class PDFSummarizeController extends Controller
     public function summarize(Request $request, PdfSummarizerService $summarizerService): JsonResponse
     {
         $file = $request->file('pdf');
-        $hasFileAttempt = $file !== null || isset($_FILES['pdf']);
         $hasUrl = filled($request->input('pdf_url'));
+        $hasFile = $file !== null;
 
-        if (! $hasFileAttempt && ! $hasUrl) {
+        if (! $hasFile && ! $hasUrl) {
             return response()->json(['message' => 'Please upload a PDF file or provide a valid PDF link (URL).'], 422);
         }
 
-        if ($hasFileAttempt) {
-            if (! $file || ! $file->isValid()) {
-                $errorCode = $file?->getError() ?? ($_FILES['pdf']['error'] ?? null);
-                $message = 'The PDF failed to upload. Please try again.';
+        if ($hasFile && ! $file->isValid()) {
+            $errorCode = $file->getError();
 
-                if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
-                    $message = 'The PDF file is too large for the server upload limit. Please select a smaller PDF file.';
-                } elseif ($errorCode === UPLOAD_ERR_PARTIAL) {
-                    $message = 'The PDF was only partially uploaded. Please try again.';
-                } elseif ($errorCode === UPLOAD_ERR_NO_FILE) {
-                    $message = 'No PDF file was uploaded. Please select a PDF file and try again.';
-                }
+            $message = match ($errorCode) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'The PDF file is too large. Please upload a file smaller than 20 MB.',
+                UPLOAD_ERR_PARTIAL => 'The PDF was only partially uploaded. Please try again.',
+                UPLOAD_ERR_NO_FILE => 'No PDF file was received. Please select a file and try again.',
+                default => 'The PDF failed to upload (error '.$errorCode.'). Please try again.',
+            };
 
-                return response()->json(['message' => $message], 422);
-            }
+            return response()->json(['message' => $message], 422);
         }
 
         $request->validate([
@@ -52,7 +48,7 @@ class PDFSummarizeController extends Controller
         $targetLanguage = $request->input('target_language', 'en');
 
         try {
-            if ($hasUrl && ! $file) {
+            if ($hasUrl && ! $hasFile) {
                 $result = $summarizerService->summarizeFromUrl($request->input('pdf_url'), $user, $summaryType, $targetLanguage);
             } else {
                 $result = $summarizerService->summarize($file, $user, $summaryType, $targetLanguage);

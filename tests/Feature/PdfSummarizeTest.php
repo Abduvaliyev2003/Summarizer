@@ -132,4 +132,25 @@ class PdfSummarizeTest extends TestCase
             'targetLanguage' => 'uz',
         ]);
     }
+
+    public function test_user_cannot_submit_internal_ssrf_url(): void
+    {
+        $plan = Plan::factory()->create(['pdf_limit' => 10, 'is_active' => true]);
+        $user = User::factory()->create(['plan_id' => $plan->id, 'pdf_count' => 0]);
+
+        $response = $this->actingAs($user)->postJson('/pdf/summarize', [
+            'pdf_url' => 'http://127.0.0.1/secret.pdf',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_security_headers_are_attached_to_responses(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+        $response->assertHeader('X-Frame-Options', 'SAMEORIGIN');
+        $response->assertHeader('X-XSS-Protection', '1; mode=block');
+    }
 }

@@ -25,7 +25,7 @@ class PdfSummarizerService
         'points' => 'Summarize the following text as bullet points, highlighting key information in a clear list format',
         'highlight' => 'Extract and list the key highlights and most important takeaways from the following text',
         'detailed' => 'Summarize the following text in a detailed and informative manner, including examples and relevant context',
-        'quiz' => "Create a complete Student Study Suite from the following text. You MUST format the output with the exact section headers below:\n\n=== KEY CONCEPTS ===\n(List key concepts, definitions, and main ideas)\n\n=== EXAM QUIZ ===\n(Provide 5 multiple choice questions. Format each question with:\nQuestion 1: [Question text]\nA) [Option A]\nB) [Option B]\nC) [Option C]\nD) [Option D]\nCorrect Answer: [Option letter + text])\n\n=== FLASHCARDS ===\n(Provide 5 study flashcards. Format each card as:\nQ: [Question text] | A: [Answer text])",
+        'quiz' => "Create a complete Student Study Suite from the following text. You MUST format the output with the exact section headers below:\n\n=== KEY CONCEPTS ===\n(List all key concepts, definitions, formulas, and main ideas found in the text)\n\n=== EXAM QUIZ ===\n(Provide exactly 25 multiple choice questions covering all major topics. Format each question with:\nQuestion 1: [Question text]\nA) [Option A]\nB) [Option B]\nC) [Option C]\nD) [Option D]\nCorrect Answer: [Option letter + text]\n\nRepeat this format for all 25 questions.)\n\n=== FLASHCARDS ===\n(Provide exactly 25 study flashcards covering key terms, concepts, and facts. Format each card as:\nQ: [Question text] | A: [Answer text])",
     ];
 
     /**
@@ -100,6 +100,8 @@ class PdfSummarizerService
             throw new InvalidArgumentException('Invalid PDF URL provided.', 422);
         }
 
+        $this->validateUrlSafety($url);
+
         try {
             $response = Http::timeout(30)->get($url);
             if (! $response->ok()) {
@@ -111,12 +113,17 @@ class PdfSummarizerService
                 throw new InvalidArgumentException('The URL returned an empty file.', 422);
             }
 
+            if (strlen($pdfContent) > 20971520) {
+                throw new InvalidArgumentException('The downloaded PDF exceeds the 20 MB size limit.', 422);
+            }
+
             $tempFileName = 'pdfs/url_'.Str::random(20).'.pdf';
             Storage::put($tempFileName, $pdfContent);
             $fullPath = Storage::path($tempFileName);
             $fileSize = strlen($pdfContent);
 
             $originalName = basename(parse_url($url, PHP_URL_PATH) ?: 'downloaded.pdf');
+            $originalName = preg_replace('/[^\w\.\-]/', '_', $originalName) ?: 'downloaded.pdf';
             if (! str_ends_with(strtolower($originalName), '.pdf')) {
                 $originalName .= '.pdf';
             }
@@ -159,9 +166,11 @@ class PdfSummarizerService
      */
     protected function extractAndSummarizeText(string $filePath, string $summaryType, string $targetLanguage): string
     {
+        $this->validatePdfMagicBytes($filePath);
+
         $text = $this->extractTextFromPdf($filePath);
 
-        $text = mb_substr($text, 0, 4000);
+        $text = mb_substr($text, 0, 12000);
 
         if ($text === '') {
             throw new InvalidArgumentException('Unable to extract text from the PDF file.', 422);
@@ -240,6 +249,49 @@ class PdfSummarizerService
             }
 
             throw $e;
+        }
+    }
+
+    /**
+     * Validate that a URL is safe against SSRF attacks (publicly accessible HTTP/HTTPS).
+     */
+    protected function validateUrlSafety(string $url): void
+    {
+        $parsed = parse_url($url);
+        $scheme = strtolower($parsed['scheme'] ?? '');
+        $host = $parsed['host'] ?? '';
+
+        if (! in_array($scheme, ['http', 'https'], true) || empty($host)) {
+            throw new InvalidArgumentException('Invalid PDF URL scheme. Only HTTP and HTTPS URLs are permitted.', 422);
+        }
+
+        // Prevent SSRF: check resolved IP against restricted private and reserved IP ranges
+        $ip = gethostbyname($host);
+
+        if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            throw new InvalidArgumentException('Target URL host resolves to a restricted internal network address.', 422);
+        }
+    }
+
+    /**
+     * Validate PDF magic bytes header signature (%PDF-).
+     */
+    protected function validatePdfMagicBytes(string $filePath): void
+    {
+        if (! file_exists($filePath) || ! is_readable($filePath)) {
+            throw new InvalidArgumentException('PDF file is missing or unreadable.', 422);
+        }
+
+        $handle = @fopen($filePath, 'rb');
+        if (! $handle) {
+            throw new InvalidArgumentException('Unable to open PDF file for inspection.', 422);
+        }
+
+        $header = fread($handle, 1024);
+        fclose($handle);
+
+        if ($header === false || ! str_contains($header, '%PDF-')) {
+            throw new InvalidArgumentException('The file content is not a valid PDF document.', 422);
         }
     }
 }
