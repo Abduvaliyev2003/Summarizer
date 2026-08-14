@@ -41,6 +41,11 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:10,1')
         ->name('pdf.compare');
 
+    // AI Rewrite & Improve endpoint
+    Route::post('/pdf/rewrite', [PDFSummarizeController::class, 'rewrite'])
+        ->middleware('throttle:10,1')
+        ->name('pdf.rewrite');
+
     // Subscription management routes (rate limited to 20 requests per minute)
     Route::prefix('subscription')->middleware('throttle:20,1')->as('subscription.')->group(function () {
         Route::post('/create-payment-intent', [SubscriptionController::class, 'createPaymentIntent'])->name('create-payment-intent');

@@ -100,4 +100,39 @@ class PDFSummarizeController extends Controller
             return response()->json(['message' => 'Failed to generate comparison: '.$e->getMessage()], 500);
         }
     }
+
+    /**
+     * Handle AI Rewrite & Improve for summary content.
+     */
+    public function rewrite(Request $request, PdfSummarizerService $summarizerService): JsonResponse
+    {
+        $request->validate([
+            'summary' => ['required', 'string'],
+            'mode' => ['required', 'string', 'in:simpler,professional,shorter,bullets'],
+            'target_language' => ['nullable', 'string', 'in:uz,en,ru,de,es,fr,tr'],
+            'summary_id' => ['nullable', 'integer', 'exists:pdf_summaries,id'],
+        ]);
+
+        $text = $request->input('summary');
+        $mode = $request->input('mode');
+        $targetLanguage = $request->input('target_language', 'en');
+
+        try {
+            $rewrittenText = $summarizerService->rewriteSummary($text, $mode, $targetLanguage);
+
+            if ($request->filled('summary_id')) {
+                $pdfSummary = $request->user()->pdfSummaries()->find($request->input('summary_id'));
+                if ($pdfSummary) {
+                    $pdfSummary->update(['summary' => $rewrittenText]);
+                }
+            }
+
+            return response()->json([
+                'summary' => $rewrittenText,
+                'mode' => $mode,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to rewrite summary: '.$e->getMessage()], 500);
+        }
+    }
 }

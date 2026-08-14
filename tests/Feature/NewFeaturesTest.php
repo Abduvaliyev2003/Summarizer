@@ -83,4 +83,19 @@ class NewFeaturesTest extends TestCase
             return $mail->user->id === $user->id;
         });
     }
+
+    public function test_user_can_rewrite_summary_with_ai(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/pdf/rewrite', [
+            'summary' => 'Original complex text summary.',
+            'mode' => 'simpler',
+            'target_language' => 'en',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonStructure(['summary', 'mode'])
+            ->assertJson(['mode' => 'simpler']);
+    }
 }

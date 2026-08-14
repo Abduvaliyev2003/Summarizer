@@ -1,6 +1,6 @@
-import { X, CheckCircle2, Copy, Download, FileText } from 'lucide-react';
+import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { Link } from '@inertiajs/react';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
 import PdfComparisonViewer from '@/components/PdfComparisonViewer';
 
@@ -24,12 +24,47 @@ export default function SummaryModal({
 }: SummaryModalProps) {
     const [copied, setCopied] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [displaySummary, setDisplaySummary] = useState(summary);
+    const [isRewriting, setIsRewriting] = useState(false);
+    const [activeMode, setActiveMode] = useState<string | null>(null);
+
+    useEffect(() => {
+        setDisplaySummary(summary);
+    }, [summary]);
 
     const summaryRef = useRef<HTMLDivElement>(null);
 
     if (!show || !summary) {
         return null;
     }
+
+    const handleRewrite = async (mode: 'simpler' | 'professional' | 'shorter' | 'bullets') => {
+        setIsRewriting(true);
+        setActiveMode(mode);
+        try {
+            const response = await fetch('/pdf/rewrite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    summary: displaySummary,
+                    mode,
+                }),
+            });
+            const data = await response.json();
+            if (response.ok && data.summary) {
+                setDisplaySummary(data.summary);
+            }
+        } catch (e) {
+            console.error('Failed to rewrite summary:', e);
+        } finally {
+            setIsRewriting(false);
+            setActiveMode(null);
+        }
+    };
 
     // Copy summary
     const handleCopy = async () => {
@@ -265,30 +300,111 @@ export default function SummaryModal({
                         className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
                     >
                         <div className="mb-6 border-b border-slate-200 pb-5">
-                            <div className="mb-2 flex items-center gap-2">
-                                <FileText className="h-5 w-5 text-violet-600" />
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div className="mb-1 flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-violet-600" />
+                                        <h3 className="text-xl font-semibold text-slate-900">
+                                            {displaySummary.includes('=== COMPARATIVE MATRIX ===')
+                                                ? '⚔️ Multi-PDF Comparison Matrix'
+                                                : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===')
+                                                ? '🎓 Student Study Suite'
+                                                : 'Summary'}
+                                        </h3>
+                                    </div>
+                                    <p className="text-sm text-slate-500">
+                                        {filename || 'Document'}
+                                    </p>
+                                </div>
 
-                                <h3 className="text-xl font-semibold text-slate-900">
-                                    {summary.includes('=== COMPARATIVE MATRIX ===')
-                                        ? '⚔️ Multi-PDF Comparison Matrix'
-                                        : summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===')
-                                        ? '🎓 Student Study Suite'
-                                        : 'Summary'}
-                                </h3>
+                                {/* AI Rewrite Action Toolbar */}
+                                {!displaySummary.includes('=== COMPARATIVE MATRIX ===') &&
+                                 !displaySummary.includes('=== FLASHCARDS ===') && (
+                                    <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
+                                        <span className="flex items-center gap-1 text-[11px] font-bold text-violet-600 px-2">
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            Rewrite:
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRewrite('simpler')}
+                                            disabled={isRewriting}
+                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                activeMode === 'simpler'
+                                                    ? 'bg-violet-600 text-white'
+                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            {isRewriting && activeMode === 'simpler' ? (
+                                                <Loader2 className="h-3 w-3 animate-spin inline" />
+                                            ) : (
+                                                '🐣 Simpler'
+                                            )}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRewrite('professional')}
+                                            disabled={isRewriting}
+                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                activeMode === 'professional'
+                                                    ? 'bg-violet-600 text-white'
+                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            {isRewriting && activeMode === 'professional' ? (
+                                                <Loader2 className="h-3 w-3 animate-spin inline" />
+                                            ) : (
+                                                '💼 Professional'
+                                            )}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRewrite('shorter')}
+                                            disabled={isRewriting}
+                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                activeMode === 'shorter'
+                                                    ? 'bg-violet-600 text-white'
+                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            {isRewriting && activeMode === 'shorter' ? (
+                                                <Loader2 className="h-3 w-3 animate-spin inline" />
+                                            ) : (
+                                                '⚡ Shorter'
+                                            )}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRewrite('bullets')}
+                                            disabled={isRewriting}
+                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                activeMode === 'bullets'
+                                                    ? 'bg-violet-600 text-white'
+                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            {isRewriting && activeMode === 'bullets' ? (
+                                                <Loader2 className="h-3 w-3 animate-spin inline" />
+                                            ) : (
+                                                '📋 Bullets'
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-
-                            <p className="text-sm text-slate-500">
-                                {filename || 'Document'}
-                            </p>
                         </div>
 
-                        {summary.includes('=== COMPARATIVE MATRIX ===') ? (
-                            <PdfComparisonViewer rawContent={summary} />
-                        ) : summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===') || summary.includes('=== KEY CONCEPTS ===') ? (
-                            <StudySuiteViewer rawContent={summary} />
+                        {displaySummary.includes('=== COMPARATIVE MATRIX ===') ? (
+                            <PdfComparisonViewer rawContent={displaySummary} />
+                        ) : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===') || displaySummary.includes('=== KEY CONCEPTS ===') ? (
+                            <StudySuiteViewer rawContent={displaySummary} />
                         ) : (
                             <div className="space-y-3">
-                                {summary.split('\n').map((line, index) => (
+                                {displaySummary.split('\n').map((line, index) => (
                                     <p
                                         key={index}
                                         className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
