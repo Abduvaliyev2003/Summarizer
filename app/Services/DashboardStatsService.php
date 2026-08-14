@@ -81,6 +81,24 @@ class DashboardStatsService
     {
         $user->load('plan');
 
+        $now = now();
+        $dailyTrend = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $day = $now->copy()->subDays($i);
+            $dailyTrend[] = [
+                'day' => $day->format('D'),
+                'count' => $user->pdfSummaries()
+                    ->whereDate('created_at', $day->toDateString())
+                    ->count(),
+            ];
+        }
+
+        $languageBreakdown = $user->pdfSummaries()
+            ->selectRaw('target_language, count(*) as total')
+            ->groupBy('target_language')
+            ->pluck('total', 'target_language')
+            ->toArray();
+
         return [
             'userStats' => [
                 'pdfCount' => $user->pdf_count ?? 0,
@@ -88,6 +106,8 @@ class DashboardStatsService
                 'planName' => $user->plan?->name ?? 'No Plan',
                 'totalSummaries' => $user->pdfSummaries()->count(),
             ],
+            'dailyTrend' => $dailyTrend,
+            'languageBreakdown' => $languageBreakdown,
             'recentSummaries' => $user->pdfSummaries()
                 ->latest()
                 ->limit(3)

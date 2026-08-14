@@ -18,6 +18,8 @@ class PdfSummary extends Model
         'target_language',
         'source_url',
         'file_size',
+        'share_token',
+        'is_shared',
     ];
 
     public function user()

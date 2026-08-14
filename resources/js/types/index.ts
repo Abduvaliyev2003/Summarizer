@@ -68,6 +68,10 @@ export interface PdfSummary {
     pdf_id?: number;
     filename: string;
     summary: string;
+    target_language?: string;
+    source_url?: string | null;
+    is_shared?: boolean;
+    share_token?: string | null;
     created_at: string;
     updated_at?: string;
 }

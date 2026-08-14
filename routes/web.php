@@ -6,6 +6,7 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PDFSummarizeController;
 use App\Http\Controllers\PdfSummaryController;
+use App\Http\Controllers\ShareController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
@@ -20,11 +21,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', WelcomeController::class)->name('home');
 Route::get('/checkout/{plan_slug}', CheckoutController::class)->name('checkout');
 
+// Public shared summary view
+Route::get('/s/{token}', [ShareController::class, 'show'])->name('share.show');
+
 // Authenticated user workspace routes
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/billing', BillingController::class)->name('billing');
     Route::get('/history', [PdfSummaryController::class, 'index'])->name('history');
+    Route::post('/history/{summary}/share', [ShareController::class, 'toggle'])->name('share.toggle');
 
     // PDF Summarization endpoint (rate limited to 10 requests per minute)
     Route::post('/pdf/summarize', [PDFSummarizeController::class, 'summarize'])

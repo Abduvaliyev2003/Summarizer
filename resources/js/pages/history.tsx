@@ -6,7 +6,7 @@ import { BreadcrumbItem, PaginatedResponse, PdfSummary } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Calendar, ChevronDown, Download, FileText, Inbox, Loader2, Sparkles } from 'lucide-react';
+import { Calendar, ChevronDown, Copy, Check, Download, ExternalLink, FileText, Inbox, Loader2, Share2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -115,6 +115,38 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
     const [expanded, setExpanded] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [exportFormat, setExportFormat] = useState<'txt' | 'pdf'>('txt');
+    const [isShared, setIsShared] = useState(summary.is_shared ?? false);
+    const [shareUrl, setShareUrl] = useState<string | null>(
+        summary.share_token ? `${window.location.origin}/s/${summary.share_token}` : null
+    );
+    const [isSharing, setIsSharing] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
+
+    const handleShare = async () => {
+        setIsSharing(true);
+        try {
+            const response = await fetch(`/history/${summary.id}/share`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                    Accept: 'application/json',
+                },
+            });
+            const data = await response.json();
+            setIsShared(data.shared);
+            setShareUrl(data.share_url ?? null);
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleCopyLink = () => {
+        if (shareUrl) {
+            navigator.clipboard.writeText(shareUrl);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
+    };
 
     const handleExport = async (format: 'txt' | 'pdf') => {
         setIsExporting(true);
@@ -148,7 +180,7 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
                         onClick={() => handleExport('txt')}
@@ -175,6 +207,48 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
                         )}
                         <span>PDF</span>
                     </button>
+
+                    {/* Share button */}
+                    <button
+                        type="button"
+                        onClick={handleShare}
+                        disabled={isSharing}
+                        className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-xs transition-all ${
+                            isShared
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10'
+                        }`}
+                    >
+                        {isSharing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Share2 className="h-3.5 w-3.5" />
+                        )}
+                        <span>{isShared ? 'Shared ✓' : 'Share'}</span>
+                    </button>
+
+                    {/* Copy link & open link when shared */}
+                    {isShared && shareUrl && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={handleCopyLink}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+                            >
+                                {linkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                {linkCopied ? 'Copied!' : 'Copy Link'}
+                            </button>
+                            <a
+                                href={shareUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+                            >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Open
+                            </a>
+                        </>
+                    )}
                 </div>
             </div>
 

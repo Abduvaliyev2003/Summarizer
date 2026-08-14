@@ -1,4 +1,5 @@
 import { AdminAnalyticsCharts } from '@/components/dashboard/admin-analytics-charts';
+import { UserAnalyticsChart } from '@/components/dashboard/user-analytics-chart';
 import { CircularProgress } from '@/components/dashboard/circular-progress';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
@@ -26,6 +27,8 @@ import { useState } from 'react';
 interface Props {
     user: User;
     userStats?: UserStats;
+    dailyTrend?: Array<{ day: string; count: number }>;
+    languageBreakdown?: Record<string, number>;
     recentSummaries?: PdfSummary[];
     adminStats?: AdminStats;
     flash?: {
@@ -81,7 +84,7 @@ function FlashToast({
     );
 }
 
-export default function Dashboard({ user, userStats, recentSummaries, adminStats, flash }: Props) {
+export default function Dashboard({ user, userStats, dailyTrend, recentSummaries, adminStats, flash }: Props) {
     const [dismissed, setDismissed] = useState(false);
     const isAdmin = user.role === 'admin';
 
@@ -363,6 +366,9 @@ export default function Dashboard({ user, userStats, recentSummaries, adminStats
                                 accent="emerald"
                             />
                         </div>
+
+                        {/* Interactive User Trend Chart */}
+                        <UserAnalyticsChart dailyTrend={dailyTrend} />
 
                         {/* Recent Summaries Widget */}
                         <SectionCard className="p-8">
