@@ -21,6 +21,9 @@ import {
     Clock,
     Lock,
     Globe,
+    GitCompare,
+    Plus,
+    Trash2,
 } from 'lucide-react';
 
 import FlashMessage from '@/components/FlashMessage';
@@ -255,8 +258,95 @@ export default function Welcome({
     |--------------------------------------------------------------------------
     */
 
-    const [inputMode, setInputMode] = useState<'file' | 'url'>('file');
+    const [inputMode, setInputMode] = useState<'file' | 'url' | 'compare'>('file');
     const [pdfUrl, setPdfUrl] = useState('');
+    const [compareFiles, setCompareFiles] = useState<File[]>([]);
+    const [targetLanguage, setTargetLanguage] = useState('uz');
+    const compareFileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleCompareFilesChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const validPdfs = files.filter(f => f.type === 'application/pdf' && f.size <= 20 * 1024 * 1024);
+        if (validPdfs.length !== files.length) {
+            alert('Some selected files were not valid PDFs or exceeded 20 MB.');
+        }
+
+        setCompareFiles(prev => [...prev, ...validPdfs].slice(0, 3));
+        e.target.value = '';
+    };
+
+    const removeCompareFile = (index: number) => {
+        setCompareFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleCompareSubmit = async () => {
+        if (!isAuthenticated) {
+            router.visit('/login');
+            return;
+        }
+
+        if (limitReached) {
+            alert('You have reached your PDF upload limit. Please upgrade your plan.');
+            return;
+        }
+
+        if (compareFiles.length < 2 || compareFiles.length > 3) {
+            alert('Please select between 2 and 3 PDF files to compare.');
+            return;
+        }
+
+        setLoading(true);
+        setProgress(15);
+        setSummary('');
+        setShowSummary(false);
+
+        const formData = new FormData();
+        compareFiles.forEach(file => {
+            formData.append('pdfs[]', file, file.name);
+        });
+        formData.append('target_language', targetLanguage);
+
+        const progressInterval = window.setInterval(() => {
+            setProgress((prev) => (prev >= 90 ? 90 : prev + 10));
+        }, 400);
+
+        try {
+            const response = await fetch('/pdf/compare', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN':
+                        document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                    Accept: 'application/json',
+                },
+                body: formData,
+            });
+
+            clearInterval(progressInterval);
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || 'Failed to compare PDFs.');
+            }
+
+            const data = await response.json();
+            setProgress(100);
+
+            setTimeout(() => {
+                setSummary(data.summary);
+                setSelectedFile(new File([], `Comparison (${compareFiles.length} docs)`));
+                setShowSummary(true);
+                setLoading(false);
+                setProgress(0);
+            }, 500);
+        } catch (err: any) {
+            clearInterval(progressInterval);
+            setLoading(false);
+            setProgress(0);
+            alert(err.message || 'Failed to generate PDF comparison.');
+        }
+    };
 
     const handleSummaryTypeSelect = async (
         summaryType: SummaryType,
@@ -768,6 +858,19 @@ export default function Welcome({
                                         <Globe className="h-4 w-4" />
                                         Paste PDF Link (URL)
                                     </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setInputMode('compare')}
+                                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+                                            inputMode === 'compare'
+                                                ? 'bg-white text-purple-600 shadow-md dark:bg-slate-900 dark:text-purple-400'
+                                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <GitCompare className="h-4 w-4" />
+                                        Compare 2-3 PDFs ⚔️
+                                    </button>
                                 </div>
 
                                 {inputMode === 'file' ? (
@@ -834,7 +937,7 @@ export default function Welcome({
                                             </span>
                                         </div>
                                     </div>
-                                ) : (
+                                ) : inputMode === 'url' ? (
                                     <div className="rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/80 sm:p-12">
                                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-500/10">
                                             <Globe className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
@@ -897,6 +1000,97 @@ export default function Welcome({
                                                 Instant fetch
                                             </span>
                                         </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-3xl border border-purple-200 bg-white/90 p-8 shadow-xl dark:border-purple-500/30 dark:bg-slate-900/80 sm:p-10">
+                                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-500/10">
+                                            <GitCompare className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                                        </div>
+
+                                        <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
+                                            Multi-PDF Comparison & Synthesizer
+                                        </h2>
+
+                                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                            Upload 2 or 3 PDF documents to generate side-by-side matrices, shared points, and differences.
+                                        </p>
+
+                                        {/* Selected files list */}
+                                        <div className="mt-6 flex flex-col gap-2.5">
+                                            {compareFiles.length === 0 ? (
+                                                <p className="py-4 text-xs font-semibold text-slate-400">
+                                                    No PDFs selected yet. Click below to pick 2 or 3 PDF files.
+                                                </p>
+                                            ) : (
+                                                compareFiles.map((file, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex items-center justify-between rounded-xl border border-purple-200/80 bg-purple-50/50 px-4 py-3 text-sm font-medium text-slate-800 dark:border-purple-500/30 dark:bg-purple-950/20 dark:text-slate-200"
+                                                    >
+                                                        <div className="flex items-center gap-2.5 truncate">
+                                                            <FileText className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
+                                                            <span className="truncate">Doc #{idx + 1}: {file.name}</span>
+                                                            <span className="text-xs text-slate-400">({(file.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeCompareFile(idx)}
+                                                            className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        <input
+                                            ref={compareFileInputRef}
+                                            type="file"
+                                            accept=".pdf,application/pdf"
+                                            multiple
+                                            onChange={handleCompareFilesChange}
+                                            className="hidden"
+                                        />
+
+                                        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+                                            {compareFiles.length < 3 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => compareFileInputRef.current?.click()}
+                                                    className="flex items-center gap-2 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 hover:bg-purple-100 dark:border-purple-500/40 dark:bg-purple-950/30 dark:text-purple-300"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                    Add PDF ({compareFiles.length}/3)
+                                                </button>
+                                            )}
+
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-medium text-slate-500">Language:</span>
+                                                <select
+                                                    value={targetLanguage}
+                                                    onChange={(e) => setTargetLanguage(e.target.value)}
+                                                    className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                                >
+                                                    <option value="uz">O'zbekcha 🇺🇿</option>
+                                                    <option value="en">English 🇬🇧</option>
+                                                    <option value="ru">Русский 🇷🇺</option>
+                                                    <option value="de">Deutsch 🇩🇪</option>
+                                                    <option value="es">Español 🇪🇸</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleCompareSubmit}
+                                            disabled={compareFiles.length < 2 || loading}
+                                            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-500/25 hover:bg-purple-700 disabled:opacity-50"
+                                        >
+                                            <GitCompare className="h-4 w-4" />
+                                            {loading ? 'Comparing Documents...' : `Compare ${compareFiles.length} PDFs`}
+                                        </button>
                                     </div>
                                 )}
                             </div>

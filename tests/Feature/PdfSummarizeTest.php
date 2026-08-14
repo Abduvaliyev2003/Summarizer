@@ -153,4 +153,44 @@ class PdfSummarizeTest extends TestCase
         $response->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $response->assertHeader('X-XSS-Protection', '1; mode=block');
     }
+
+    public function test_user_can_compare_multiple_pdfs(): void
+    {
+        Config::set('services.openrouter.key', 'mock-openrouter-key');
+
+        $plan = Plan::factory()->create(['pdf_limit' => 10, 'is_active' => true]);
+        $user = User::factory()->create(['plan_id' => $plan->id, 'pdf_count' => 0]);
+
+        $pdfContent1 = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 30 >>\nstream\nBT /F1 12 Tf (Doc 1) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000214 00000 n \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n294\n%%EOF";
+        $pdfContent2 = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 30 >>\nstream\nBT /F1 12 Tf (Doc 2) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000214 00000 n \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n294\n%%EOF";
+
+        $file1 = UploadedFile::fake()->createWithContent('paper1.pdf', $pdfContent1);
+        $file2 = UploadedFile::fake()->createWithContent('paper2.pdf', $pdfContent2);
+
+        $mockOutput = "=== COMPARATIVE MATRIX ===\n| Topic | Doc 1 | Doc 2 |\n| Method | A | B |\n\n=== KEY SIMILARITIES ===\nBoth papers use AI.\n\n=== KEY DIFFERENCES ===\nPaper 1 uses Python, Paper 2 uses PHP.\n\n=== SYNTHESIZED CONCLUSION ===\nCombining both provides complete framework.";
+
+        Http::fake([
+            'https://openrouter.ai/api/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => $mockOutput,
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/pdf/compare', [
+            'pdfs' => [$file1, $file2],
+            'target_language' => 'en',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'summary' => $mockOutput,
+            'targetLanguage' => 'en',
+            'filenames' => ['paper1.pdf', 'paper2.pdf'],
+        ]);
+    }
 }

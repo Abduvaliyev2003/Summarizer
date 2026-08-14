@@ -31,6 +31,11 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:10,1')
         ->name('pdf.summarize');
 
+    // Multi-PDF Comparison endpoint
+    Route::post('/pdf/compare', [PDFSummarizeController::class, 'compare'])
+        ->middleware('throttle:10,1')
+        ->name('pdf.compare');
+
     // Subscription management routes (rate limited to 20 requests per minute)
     Route::prefix('subscription')->middleware('throttle:20,1')->as('subscription.')->group(function () {
         Route::post('/create-payment-intent', [SubscriptionController::class, 'createPaymentIntent'])->name('create-payment-intent');

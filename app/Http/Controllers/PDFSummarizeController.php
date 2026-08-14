@@ -65,4 +65,39 @@ class PDFSummarizeController extends Controller
             return response()->json(['message' => 'Failed to generate summary: '.$e->getMessage()], 500);
         }
     }
+
+    /**
+     * Handle multi-PDF comparison (2 to 3 files).
+     */
+    public function compare(Request $request, PdfSummarizerService $summarizerService): JsonResponse
+    {
+        $files = $request->file('pdfs');
+
+        if (! is_array($files) || count($files) < 2 || count($files) > 3) {
+            return response()->json(['message' => 'Please select between 2 and 3 PDF files for comparison.'], 422);
+        }
+
+        $request->validate([
+            'pdfs' => ['required', 'array', 'min:2', 'max:3'],
+            'pdfs.*' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+            'target_language' => ['nullable', 'string', 'in:uz,en,ru,de,es,fr,tr'],
+        ]);
+
+        $user = $request->user();
+        $targetLanguage = $request->input('target_language', 'en');
+
+        try {
+            $result = $summarizerService->comparePdfs($files, $user, $targetLanguage);
+
+            return response()->json($result);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (RuntimeException $e) {
+            $status = $e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500;
+
+            return response()->json(['message' => $e->getMessage()], $status);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to generate comparison: '.$e->getMessage()], 500);
+        }
+    }
 }

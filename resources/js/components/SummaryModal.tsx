@@ -2,6 +2,7 @@ import { X, CheckCircle2, Copy, Download, FileText } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { useRef, useState } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
+import PdfComparisonViewer from '@/components/PdfComparisonViewer';
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -268,7 +269,9 @@ export default function SummaryModal({
                                 <FileText className="h-5 w-5 text-violet-600" />
 
                                 <h3 className="text-xl font-semibold text-slate-900">
-                                    {summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===')
+                                    {summary.includes('=== COMPARATIVE MATRIX ===')
+                                        ? '⚔️ Multi-PDF Comparison Matrix'
+                                        : summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===')
                                         ? '🎓 Student Study Suite'
                                         : 'Summary'}
                                 </h3>
@@ -279,7 +282,9 @@ export default function SummaryModal({
                             </p>
                         </div>
 
-                        {summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===') || summary.includes('=== KEY CONCEPTS ===') ? (
+                        {summary.includes('=== COMPARATIVE MATRIX ===') ? (
+                            <PdfComparisonViewer rawContent={summary} />
+                        ) : summary.includes('=== FLASHCARDS ===') || summary.includes('=== EXAM QUIZ ===') || summary.includes('=== KEY CONCEPTS ===') ? (
                             <StudySuiteViewer rawContent={summary} />
                         ) : (
                             <div className="space-y-3">

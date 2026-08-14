@@ -162,6 +162,123 @@ class PdfSummarizerService
     }
 
     /**
+     * Compare and synthesize 2 to 3 PDF documents.
+     *
+     * @param  array<int, UploadedFile>  $files
+     * @return array{summary: string, id: int, pdfCount: int, targetLanguage: string, filenames: array<int, string>}
+     */
+    public function comparePdfs(array $files, User $user, string $targetLanguage = 'en'): array
+    {
+        if (! $user->canSummarizePdf()) {
+            throw new RuntimeException('You have reached your PDF limit for this month. Please upgrade your plan to continue using our service.', 403);
+        }
+
+        if (count($files) < 2 || count($files) > 3) {
+            throw new InvalidArgumentException('Please select between 2 and 3 PDF files to compare.', 422);
+        }
+
+        $tempPaths = [];
+        $extractedTexts = [];
+        $filenames = [];
+
+        try {
+            foreach ($files as $index => $file) {
+                if (! $file instanceof UploadedFile || ! $file->isValid()) {
+                    throw new InvalidArgumentException('One of the selected PDF files is invalid or failed to upload.', 422);
+                }
+
+                $originalName = $file->getClientOriginalName();
+                $path = $file->store('pdfs');
+                $tempPaths[] = $path;
+                $filenames[] = $originalName;
+
+                $fullPath = Storage::path($path);
+                $this->validatePdfMagicBytes($fullPath);
+
+                $text = $this->extractTextFromPdf($fullPath);
+                $text = mb_substr($text, 0, 6000);
+
+                if (trim($text) === '') {
+                    throw new InvalidArgumentException("Unable to extract text from file: {$originalName}", 422);
+                }
+
+                $docNum = $index + 1;
+                $extractedTexts[] = "DOCUMENT {$docNum} (\"{$originalName}\"):\n{$text}";
+            }
+
+            $combinedText = implode("\n\n".str_repeat('=', 40)."\n\n", $extractedTexts);
+            $langName = $this->languages[$targetLanguage] ?? 'English';
+
+            $prompt = 'Compare and synthesize the provided '.count($files)." PDF documents. You MUST format your response using the EXACT section headers below:\n\n=== COMPARATIVE MATRIX ===\n(Provide a markdown table comparing key topics/aspects across all documents with columns: Topic | ".implode(' | ', array_map(fn ($f) => 'Doc: '.basename($f), $filenames)).")\n\n=== KEY SIMILARITIES ===\n(List key points, concepts, and findings where the documents agree)\n\n=== KEY DIFFERENCES ===\n(List key differences, conflicting viewpoints, and unique insights of each document)\n\n=== SYNTHESIZED CONCLUSION ===\n(Provide a unified synthesis and overall conclusions drawing from all documents)";
+
+            $apiKey = config('services.openrouter.key');
+            if (empty($apiKey)) {
+                Log::error('OpenRouter API Key is not set.');
+                throw new RuntimeException('OpenRouter API Key is not set.', 500);
+            }
+
+            $response = Http::timeout(90)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://openrouter.ai/api/v1/chat/completions', [
+                    'model' => 'openai/gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are an expert academic and professional research analyst specializing in comparative document analysis. CRITICAL INSTRUCTION: Write the ENTIRE comparison in {$langName} language.",
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => "{$prompt}\n\n{$combinedText}",
+                        ],
+                    ],
+                ]);
+
+            if (! $response->ok()) {
+                Log::error('OpenRouter API comparison error', ['status' => $response->status(), 'body' => $response->body()]);
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Failed to generate comparison.';
+                throw new RuntimeException($errorMessage, 502);
+            }
+
+            $data = $response->json();
+            $comparisonResult = $data['choices'][0]['message']['content'] ?? null;
+
+            if (empty($comparisonResult)) {
+                throw new RuntimeException('Unable to generate PDF comparison.', 500);
+            }
+
+            $compositeFilename = 'Comparison: '.implode(' vs ', array_map(fn ($f) => Str::limit($f, 20), $filenames));
+
+            $pdfSummary = PdfSummary::create([
+                'user_id' => $user->id,
+                'filename' => $compositeFilename,
+                'summary' => $comparisonResult,
+                'target_language' => $targetLanguage,
+                'file_size' => 0,
+            ]);
+
+            $user->increment('pdf_count');
+
+            return [
+                'summary' => $comparisonResult,
+                'id' => $pdfSummary->id,
+                'pdfCount' => (int) $user->fresh()->pdf_count,
+                'targetLanguage' => $targetLanguage,
+                'filenames' => $filenames,
+            ];
+        } finally {
+            foreach ($tempPaths as $path) {
+                if (Storage::exists($path)) {
+                    Storage::delete($path);
+                }
+            }
+        }
+    }
+
+    /**
      * Parse text from PDF and request AI summary in the target language.
      */
     protected function extractAndSummarizeText(string $filePath, string $summaryType, string $targetLanguage): string
