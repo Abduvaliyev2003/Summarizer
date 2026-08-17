@@ -114,4 +114,18 @@ class BackendBugFixesTest extends TestCase
 
         $this->assertEquals($newPlan->id, $user->fresh()->plan_id);
     }
+
+    public function test_user_can_translate_summary_via_rewrite_endpoint(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson(route('pdf.rewrite'), [
+            'summary' => 'This is a sample document summary.',
+            'mode' => 'translate',
+            'target_language' => 'uz',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['summary']);
+    }
 }

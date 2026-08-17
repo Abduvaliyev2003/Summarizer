@@ -373,6 +373,7 @@ class PdfSummarizerService
             'professional' => 'Rewrite the following text in a formal, executive, highly professional tone suitable for business reports.',
             'shorter' => 'Condense the following text into a brief, punchy summary highlighting only the absolute essential points.',
             'bullets' => 'Reformat the following text into a clean bulleted list of key takeaways.',
+            'translate' => 'Translate the provided text accurately, naturally, and completely into the target language while maintaining the original paragraph structure and tone.',
         ];
 
         $promptInstruction = $rewritePrompts[$mode] ?? $rewritePrompts['simpler'];
@@ -426,6 +427,7 @@ class PdfSummarizerService
             'simpler' => implode("\n\n", array_map(function ($line) {
                 return str_replace(['furthermore', 'moreover', 'consequently', 'subsequently'], ['also', 'also', 'so', 'then'], $line);
             }, $lines)),
+            'translate' => implode("\n\n", $lines),
             default => $text,
         };
     }

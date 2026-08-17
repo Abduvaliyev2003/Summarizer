@@ -109,7 +109,7 @@ class PDFSummarizeController extends Controller
     {
         $request->validate([
             'summary' => ['required', 'string'],
-            'mode' => ['required', 'string', 'in:simpler,professional,shorter,bullets'],
+            'mode' => ['required', 'string', 'in:simpler,professional,shorter,bullets,translate'],
             'target_language' => ['nullable', 'string', 'in:uz,en,ru,de,es,fr,tr'],
             'summary_id' => [
                 'nullable',

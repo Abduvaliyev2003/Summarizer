@@ -1,4 +1,4 @@
-import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, MessageSquare } from 'lucide-react';
+import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, MessageSquare, Globe } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { useRef, useState, useEffect } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
@@ -16,6 +16,16 @@ interface SummaryModalProps {
     onNewUpload: () => void;
 }
 
+const DUAL_LANGUAGES = [
+    { code: 'uz', name: "O'zbekcha", flag: '🇺🇿' },
+    { code: 'en', name: 'English', flag: '🇬🇧' },
+    { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
+];
+
 export default function SummaryModal({
     show,
     summary,
@@ -30,9 +40,48 @@ export default function SummaryModal({
     const [activeMode, setActiveMode] = useState<string | null>(null);
     const [showChat, setShowChat] = useState(false);
 
+    // Side-by-Side Dual View states
+    const [showDualView, setShowDualView] = useState(false);
+    const [dualTargetLang, setDualTargetLang] = useState('uz');
+    const [translatedText, setTranslatedText] = useState<string | null>(null);
+    const [isTranslating, setIsTranslating] = useState(false);
+
     useEffect(() => {
         setDisplaySummary(summary);
+        setTranslatedText(null);
+        setShowDualView(false);
     }, [summary]);
+
+    const handleFetchDualTranslation = async (lang: string) => {
+        setIsTranslating(true);
+        setDualTargetLang(lang);
+        try {
+            const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+            const response = await fetch('/pdf/rewrite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    summary: displaySummary,
+                    mode: 'translate',
+                    target_language: lang,
+                }),
+            });
+            const data = await response.json();
+            if (response.ok && data.summary) {
+                setTranslatedText(data.summary);
+            } else {
+                setTranslatedText('Failed to generate translation. Please try again.');
+            }
+        } catch {
+            setTranslatedText('Error generating translation. Please try again.');
+        } finally {
+            setIsTranslating(false);
+        }
+    };
 
     const summaryRef = useRef<HTMLDivElement>(null);
 
@@ -401,6 +450,25 @@ export default function SummaryModal({
                                                     '📋 Bullets'
                                                 )}
                                             </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const nextState = !showDualView;
+                                                    setShowDualView(nextState);
+                                                    if (nextState && !translatedText) {
+                                                        handleFetchDualTranslation(dualTargetLang);
+                                                    }
+                                                }}
+                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                                                    showDualView
+                                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300'
+                                                }`}
+                                            >
+                                                <Globe className="h-3 w-3" />
+                                                {showDualView ? 'Single View' : '🌐 Dual View'}
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -410,6 +478,70 @@ export default function SummaryModal({
                                 <PdfComparisonViewer rawContent={displaySummary} />
                             ) : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===') || displaySummary.includes('=== KEY CONCEPTS ===') ? (
                                 <StudySuiteViewer rawContent={displaySummary} />
+                            ) : showDualView ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Left Column: Original Summary */}
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
+                                        <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
+                                            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                <FileText className="h-4 w-4 text-violet-600" />
+                                                Original Summary
+                                            </span>
+                                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                                Primary
+                                            </span>
+                                        </div>
+                                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                                            {displaySummary.split('\n').map((line, index) => (
+                                                <p key={index} className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
+                                                    {line || '\u00A0'}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Right Column: Side-by-Side Dual Translation */}
+                                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/30 p-5 dark:border-indigo-900/50 dark:bg-slate-900/50">
+                                        <div className="mb-4 flex items-center justify-between border-b border-indigo-100 pb-3 dark:border-slate-800">
+                                            <div className="flex items-center gap-1.5">
+                                                <Globe className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                                <span className="text-xs font-bold text-slate-900 dark:text-white">Dual Translation</span>
+                                            </div>
+
+                                            <select
+                                                value={dualTargetLang}
+                                                onChange={(e) => handleFetchDualTranslation(e.target.value)}
+                                                disabled={isTranslating}
+                                                className="rounded-xl border border-indigo-200 bg-white px-2.5 py-1 text-xs font-bold text-indigo-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-300"
+                                            >
+                                                {DUAL_LANGUAGES.map((lang) => (
+                                                    <option key={lang.code} value={lang.code}>
+                                                        {lang.flag} {lang.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {isTranslating ? (
+                                            <div className="flex h-48 flex-col items-center justify-center gap-3 text-indigo-600 dark:text-indigo-400">
+                                                <Loader2 className="h-7 w-7 animate-spin" />
+                                                <p className="text-xs font-semibold">Translating side-by-side into {DUAL_LANGUAGES.find(l => l.code === dualTargetLang)?.name}...</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                                                {translatedText ? (
+                                                    translatedText.split('\n').map((line, index) => (
+                                                        <p key={index} className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
+                                                            {line || '\u00A0'}
+                                                        </p>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic">Select a language to load parallel translation.</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="space-y-3">
                                     {displaySummary.split('\n').map((line, index) => (
