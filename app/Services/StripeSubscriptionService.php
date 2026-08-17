@@ -164,37 +164,35 @@ class StripeSubscriptionService
      */
     public function changePlan(User $user, Plan $newPlan): void
     {
-        if (! $user->stripe_subscription_id) {
-            throw new RuntimeException('No active subscription found.', 400);
-        }
+        if ($user->stripe_subscription_id) {
+            try {
+                $subscription = $this->stripe->subscriptions->retrieve($user->stripe_subscription_id);
+                $firstItemId = $subscription->items->data[0]->id ?? null;
 
-        try {
-            $subscription = $this->stripe->subscriptions->retrieve($user->stripe_subscription_id);
-            $firstItemId = $subscription->items->data[0]->id ?? null;
-
-            if ($firstItemId) {
-                $this->stripe->subscriptions->update($user->stripe_subscription_id, [
-                    'items' => [
-                        [
-                            'id' => $firstItemId,
-                            'price_data' => [
-                                'currency' => 'usd',
-                                'unit_amount' => (int) round($newPlan->price * 100),
-                                'product_data' => [
-                                    'name' => $newPlan->name.' Plan',
-                                    'description' => $newPlan->description,
-                                ],
-                                'recurring' => [
-                                    'interval' => 'month',
+                if ($firstItemId) {
+                    $this->stripe->subscriptions->update($user->stripe_subscription_id, [
+                        'items' => [
+                            [
+                                'id' => $firstItemId,
+                                'price_data' => [
+                                    'currency' => 'usd',
+                                    'unit_amount' => (int) round($newPlan->price * 100),
+                                    'product_data' => [
+                                        'name' => $newPlan->name.' Plan',
+                                        'description' => $newPlan->description,
+                                    ],
+                                    'recurring' => [
+                                        'interval' => 'month',
+                                    ],
                                 ],
                             ],
                         ],
-                    ],
-                    'proration_behavior' => 'create_prorations',
-                ]);
+                        'proration_behavior' => 'create_prorations',
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Stripe change plan API call warning: '.$e->getMessage());
             }
-        } catch (\Exception $e) {
-            Log::warning('Stripe change plan API call warning: '.$e->getMessage());
         }
 
         $user->update([

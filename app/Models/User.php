@@ -26,6 +26,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'stripe_customer_id',
+        'stripe_subscription_id',
     ];
 
     protected function casts(): array
@@ -69,6 +71,19 @@ class User extends Authenticatable
 
     public function canSummarizePdf(): bool
     {
+        if (! $this->plan_id) {
+            $freePlan = Plan::where('slug', 'free')->first();
+            if ($freePlan) {
+                $this->update([
+                    'plan_id' => $freePlan->id,
+                    'pdf_count_reset_at' => $this->pdf_count_reset_at ?? now()->addDays(30),
+                ]);
+                $this->load('plan');
+            }
+        } elseif (! $this->relationLoaded('plan')) {
+            $this->load('plan');
+        }
+
         if (! $this->plan) {
             return false;
         }

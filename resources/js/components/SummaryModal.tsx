@@ -75,7 +75,7 @@ export default function SummaryModal({
     // Copy summary
     const handleCopy = async () => {
         try {
-            await navigator.clipboard.writeText(summary);
+            await navigator.clipboard.writeText(displaySummary);
 
             setCopied(true);
 
@@ -92,7 +92,7 @@ export default function SummaryModal({
         const fileName =
             filename?.replace(/\.pdf$/i, '') || 'summary';
 
-        const blob = new Blob([summary], {
+        const blob = new Blob([displaySummary], {
             type: 'text/plain;charset=utf-8',
         });
 
@@ -163,7 +163,7 @@ export default function SummaryModal({
             // Summary content
             const content = document.createElement('div');
 
-            summary.split('\n').forEach((line) => {
+            displaySummary.split('\n').forEach((line) => {
                 const paragraph = document.createElement('p');
 
                 paragraph.textContent = line || '\u00A0';

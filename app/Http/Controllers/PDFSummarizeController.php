@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\PdfSummarizerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -110,7 +111,11 @@ class PDFSummarizeController extends Controller
             'summary' => ['required', 'string'],
             'mode' => ['required', 'string', 'in:simpler,professional,shorter,bullets'],
             'target_language' => ['nullable', 'string', 'in:uz,en,ru,de,es,fr,tr'],
-            'summary_id' => ['nullable', 'integer', 'exists:pdf_summaries,id'],
+            'summary_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('pdf_summaries', 'id')->where('user_id', $request->user()->id),
+            ],
         ]);
 
         $text = $request->input('summary');

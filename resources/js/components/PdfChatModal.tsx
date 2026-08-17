@@ -118,7 +118,7 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
             const errorMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: `⚠️ ${e.message || 'Sorry, I could not process your question. Please try again.'}`,
+                content: '⚠️ Sorry, I could not process your question right now. Please try again.',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
             setMessages((prev) => [...prev, errorMsg]);

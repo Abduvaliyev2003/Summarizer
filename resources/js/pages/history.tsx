@@ -36,6 +36,15 @@ function downloadAsText(summary: PdfSummary): void {
     URL.revokeObjectURL(element.href);
 }
 
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 async function exportAsPdf(summary: PdfSummary): Promise<void> {
     const exportContainer = document.createElement('div');
     exportContainer.setAttribute('data-export-container', 'true');
@@ -55,16 +64,16 @@ async function exportAsPdf(summary: PdfSummary): Promise<void> {
                     Summary
                 </h3>
                 <p style="font-size: 14px; color: #333333; margin: 0 0 4px 0;">
-                    ${summary.filename}
+                    ${escapeHtml(summary.filename)}
                 </p>
                 <p style="font-size: 12px; color: #666666; margin: 0;">
-                    ${formatDateTime(summary.created_at)}
+                    ${escapeHtml(formatDateTime(summary.created_at))}
                 </p>
             </div>
             <div style="color: #000000; line-height: 1.75;">
                 ${summary.summary
                     .split('\n')
-                    .map((paragraph) => `<p style="font-size: 16px; margin-bottom: 16px; margin-top: 0;">${paragraph}</p>`)
+                    .map((paragraph) => `<p style="font-size: 16px; margin-bottom: 16px; margin-top: 0;">${escapeHtml(paragraph)}</p>`)
                     .join('')}
             </div>
         </div>
