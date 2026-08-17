@@ -98,4 +98,28 @@ class NewFeaturesTest extends TestCase
             ->assertJsonStructure(['summary', 'mode'])
             ->assertJson(['mode' => 'simpler']);
     }
+
+    public function test_user_can_chat_with_pdf_summary(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/pdf/chat', [
+            'question' => 'What is the main topic of this document?',
+            'context_summary' => 'This document is about business communication for students. It covers writing, speaking, and listening skills.',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonStructure(['answer'])
+            ->assertJsonPath('answer', fn ($answer) => is_string($answer) && strlen($answer) > 0);
+    }
+
+    public function test_chat_validates_required_fields(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/pdf/chat', []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['question', 'context_summary']);
+    }
 }

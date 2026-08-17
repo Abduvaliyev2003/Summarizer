@@ -46,6 +46,11 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:10,1')
         ->name('pdf.rewrite');
 
+    // Chat with PDF Q&A endpoint
+    Route::post('/pdf/chat', [PDFSummarizeController::class, 'chat'])
+        ->middleware('throttle:15,1')
+        ->name('pdf.chat');
+
     // Subscription management routes (rate limited to 20 requests per minute)
     Route::prefix('subscription')->middleware('throttle:20,1')->as('subscription.')->group(function () {
         Route::post('/create-payment-intent', [SubscriptionController::class, 'createPaymentIntent'])->name('create-payment-intent');

@@ -1,8 +1,9 @@
-import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, MessageSquare } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { useRef, useState, useEffect } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
 import PdfComparisonViewer from '@/components/PdfComparisonViewer';
+import PdfChatModal from '@/components/PdfChatModal';
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -27,6 +28,7 @@ export default function SummaryModal({
     const [displaySummary, setDisplaySummary] = useState(summary);
     const [isRewriting, setIsRewriting] = useState(false);
     const [activeMode, setActiveMode] = useState<string | null>(null);
+    const [showChat, setShowChat] = useState(false);
 
     useEffect(() => {
         setDisplaySummary(summary);
@@ -258,238 +260,257 @@ export default function SummaryModal({
     };
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="summary-modal-title"
-        >
-            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <>
+            <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="summary-modal-title"
+            >
+                {/* everything from line 269 to 503 unchanged */}
+                <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-                {/* Header */}
-                <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5 sm:px-8">
-                    <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
-                            <CheckCircle2 className="h-6 w-6 text-white" />
+                    {/* Header */}
+                    <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5 sm:px-8">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                                <CheckCircle2 className="h-6 w-6 text-white" />
+                            </div>
+
+                            <div className="min-w-0">
+                                <h2
+                                    id="summary-modal-title"
+                                    className="text-lg font-semibold text-white"
+                                >
+                                    Summary Generated
+                                </h2>
+
+                                <p className="truncate text-sm text-white/75">
+                                    {filename || 'Document'}
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="min-w-0">
-                            <h2
-                                id="summary-modal-title"
-                                className="text-lg font-semibold text-white"
-                            >
-                                Summary Generated
-                            </h2>
-
-                            <p className="truncate text-sm text-white/75">
-                                {filename || 'Document'}
-                            </p>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-lg p-2 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/50"
+                            aria-label="Close summary"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-lg p-2 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/50"
-                        aria-label="Close summary"
-                    >
-                        <X className="h-6 w-6" />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8">
-                    <div
-                        ref={summaryRef}
-                        className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
-                    >
-                        <div className="mb-6 border-b border-slate-200 pb-5">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <div className="mb-1 flex items-center gap-2">
-                                        <FileText className="h-5 w-5 text-violet-600" />
-                                        <h3 className="text-xl font-semibold text-slate-900">
-                                            {displaySummary.includes('=== COMPARATIVE MATRIX ===')
-                                                ? '⚔️ Multi-PDF Comparison Matrix'
-                                                : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===')
-                                                ? '🎓 Student Study Suite'
-                                                : 'Summary'}
-                                        </h3>
+                    {/* Content */}
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8">
+                        <div
+                            ref={summaryRef}
+                            className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+                        >
+                            <div className="mb-6 border-b border-slate-200 pb-5">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <div className="mb-1 flex items-center gap-2">
+                                            <FileText className="h-5 w-5 text-violet-600" />
+                                            <h3 className="text-xl font-semibold text-slate-900">
+                                                {displaySummary.includes('=== COMPARATIVE MATRIX ===')
+                                                    ? '⚔️ Multi-PDF Comparison Matrix'
+                                                    : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===')
+                                                    ? '🎓 Student Study Suite'
+                                                    : 'Summary'}
+                                            </h3>
+                                        </div>
+                                        <p className="text-sm text-slate-500">
+                                            {filename || 'Document'}
+                                        </p>
                                     </div>
-                                    <p className="text-sm text-slate-500">
-                                        {filename || 'Document'}
-                                    </p>
+
+                                    {/* AI Rewrite Action Toolbar */}
+                                    {!displaySummary.includes('=== COMPARATIVE MATRIX ===') &&
+                                     !displaySummary.includes('=== FLASHCARDS ===') && (
+                                        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-violet-600 px-2">
+                                                <Sparkles className="h-3.5 w-3.5" />
+                                                Rewrite:
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRewrite('simpler')}
+                                                disabled={isRewriting}
+                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                    activeMode === 'simpler'
+                                                        ? 'bg-violet-600 text-white'
+                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                                }`}
+                                            >
+                                                {isRewriting && activeMode === 'simpler' ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
+                                                ) : (
+                                                    '🐣 Simpler'
+                                                )}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRewrite('professional')}
+                                                disabled={isRewriting}
+                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                    activeMode === 'professional'
+                                                        ? 'bg-violet-600 text-white'
+                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                                }`}
+                                            >
+                                                {isRewriting && activeMode === 'professional' ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
+                                                ) : (
+                                                    '💼 Professional'
+                                                )}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRewrite('shorter')}
+                                                disabled={isRewriting}
+                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                    activeMode === 'shorter'
+                                                        ? 'bg-violet-600 text-white'
+                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                                }`}
+                                            >
+                                                {isRewriting && activeMode === 'shorter' ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
+                                                ) : (
+                                                    '⚡ Shorter'
+                                                )}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRewrite('bullets')}
+                                                disabled={isRewriting}
+                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                    activeMode === 'bullets'
+                                                        ? 'bg-violet-600 text-white'
+                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
+                                                }`}
+                                            >
+                                                {isRewriting && activeMode === 'bullets' ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
+                                                ) : (
+                                                    '📋 Bullets'
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* AI Rewrite Action Toolbar */}
-                                {!displaySummary.includes('=== COMPARATIVE MATRIX ===') &&
-                                 !displaySummary.includes('=== FLASHCARDS ===') && (
-                                    <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
-                                        <span className="flex items-center gap-1 text-[11px] font-bold text-violet-600 px-2">
-                                            <Sparkles className="h-3.5 w-3.5" />
-                                            Rewrite:
-                                        </span>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRewrite('simpler')}
-                                            disabled={isRewriting}
-                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                activeMode === 'simpler'
-                                                    ? 'bg-violet-600 text-white'
-                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                            }`}
-                                        >
-                                            {isRewriting && activeMode === 'simpler' ? (
-                                                <Loader2 className="h-3 w-3 animate-spin inline" />
-                                            ) : (
-                                                '🐣 Simpler'
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRewrite('professional')}
-                                            disabled={isRewriting}
-                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                activeMode === 'professional'
-                                                    ? 'bg-violet-600 text-white'
-                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                            }`}
-                                        >
-                                            {isRewriting && activeMode === 'professional' ? (
-                                                <Loader2 className="h-3 w-3 animate-spin inline" />
-                                            ) : (
-                                                '💼 Professional'
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRewrite('shorter')}
-                                            disabled={isRewriting}
-                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                activeMode === 'shorter'
-                                                    ? 'bg-violet-600 text-white'
-                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                            }`}
-                                        >
-                                            {isRewriting && activeMode === 'shorter' ? (
-                                                <Loader2 className="h-3 w-3 animate-spin inline" />
-                                            ) : (
-                                                '⚡ Shorter'
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRewrite('bullets')}
-                                            disabled={isRewriting}
-                                            className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                activeMode === 'bullets'
-                                                    ? 'bg-violet-600 text-white'
-                                                    : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                            }`}
-                                        >
-                                            {isRewriting && activeMode === 'bullets' ? (
-                                                <Loader2 className="h-3 w-3 animate-spin inline" />
-                                            ) : (
-                                                '📋 Bullets'
-                                            )}
-                                        </button>
-                                    </div>
-                                )}
                             </div>
+
+                            {displaySummary.includes('=== COMPARATIVE MATRIX ===') ? (
+                                <PdfComparisonViewer rawContent={displaySummary} />
+                            ) : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===') || displaySummary.includes('=== KEY CONCEPTS ===') ? (
+                                <StudySuiteViewer rawContent={displaySummary} />
+                            ) : (
+                                <div className="space-y-3">
+                                    {displaySummary.split('\n').map((line, index) => (
+                                        <p
+                                            key={index}
+                                            className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
+                                        >
+                                            {line || '\u00A0'}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex shrink-0 flex-col gap-4 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+
+                        {/* Export actions */}
+                        <div className="flex flex-wrap gap-2">
+                            {/* Copy */}
+                            <button
+                                type="button"
+                                onClick={handleCopy}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                            >
+                                {copied ? (
+                                    <>
+                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                        Copied!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-4 w-4" />
+                                        Copy
+                                    </>
+                                )}
+                            </button>
+
+                            {/* TXT Download */}
+                            <button
+                                type="button"
+                                onClick={handleDownload}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                            >
+                                <Download className="h-4 w-4" />
+                                Download TXT
+                            </button>
+
+                            {/* PDF */}
+                            <button
+                                type="button"
+                                onClick={handleExportPDF}
+                                disabled={exporting}
+                                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                            >
+                                <FileText className="h-4 w-4" />
+
+                                {exporting
+                                    ? 'Exporting...'
+                                    : 'Export as PDF'}
+                            </button>
                         </div>
 
-                        {displaySummary.includes('=== COMPARATIVE MATRIX ===') ? (
-                            <PdfComparisonViewer rawContent={displaySummary} />
-                        ) : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===') || displaySummary.includes('=== KEY CONCEPTS ===') ? (
-                            <StudySuiteViewer rawContent={displaySummary} />
-                        ) : (
-                            <div className="space-y-3">
-                                {displaySummary.split('\n').map((line, index) => (
-                                    <p
-                                        key={index}
-                                        className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
-                                    >
-                                        {line || '\u00A0'}
-                                    </p>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                        {/* Navigation */}
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowChat(true)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-medium text-violet-700 transition hover:bg-violet-100"
+                            >
+                                <MessageSquare className="h-4 w-4" />
+                                Chat with PDF
+                            </button>
 
-                {/* Footer */}
-                <div className="flex shrink-0 flex-col gap-4 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+                            <button
+                                type="button"
+                                onClick={onNewUpload}
+                                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                                New Upload
+                            </button>
 
-                    {/* Export actions */}
-                    <div className="flex flex-wrap gap-2">
-                        {/* Copy */}
-                        <button
-                            type="button"
-                            onClick={handleCopy}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
-                        >
-                            {copied ? (
-                                <>
-                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                    Copied!
-                                </>
-                            ) : (
-                                <>
-                                    <Copy className="h-4 w-4" />
-                                    Copy
-                                </>
-                            )}
-                        </button>
-
-                        {/* TXT Download */}
-                        <button
-                            type="button"
-                            onClick={handleDownload}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
-                        >
-                            <Download className="h-4 w-4" />
-                            Download TXT
-                        </button>
-
-                        {/* PDF */}
-                        <button
-                            type="button"
-                            onClick={handleExportPDF}
-                            disabled={exporting}
-                            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
-                        >
-                            <FileText className="h-4 w-4" />
-
-                            {exporting
-                                ? 'Exporting...'
-                                : 'Export as PDF'}
-                        </button>
-                    </div>
-
-                    {/* Navigation */}
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            onClick={onNewUpload}
-                            className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                            New Upload
-                        </button>
-
-                        <Link
-                            href="/history"
-                            className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
-                        >
-                            View History
-                        </Link>
+                            <Link
+                                href="/history"
+                                className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                            >
+                                View History
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <PdfChatModal
+                show={showChat}
+                summary={displaySummary}
+                filename={filename}
+                onClose={() => setShowChat(false)}
+            />
+        </>
     );
 }
 

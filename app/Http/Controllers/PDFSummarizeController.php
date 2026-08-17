@@ -135,4 +135,32 @@ class PDFSummarizeController extends Controller
             return response()->json(['message' => 'Failed to rewrite summary: '.$e->getMessage()], 500);
         }
     }
+
+    /**
+     * Handle Chat with PDF Q&A.
+     */
+    public function chat(Request $request, PdfSummarizerService $summarizerService): JsonResponse
+    {
+        $request->validate([
+            'question' => ['required', 'string', 'max:1000'],
+            'context_summary' => ['required', 'string'],
+            'history' => ['nullable', 'array'],
+            'history.*.role' => ['required_with:history', 'string', 'in:user,assistant'],
+            'history.*.content' => ['required_with:history', 'string'],
+        ]);
+
+        $question = $request->input('question');
+        $contextSummary = $request->input('context_summary');
+        $history = $request->input('history', []);
+
+        try {
+            $answer = $summarizerService->chatWithPdf($question, $contextSummary, $history);
+
+            return response()->json([
+                'answer' => $answer,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to process chat question: '.$e->getMessage()], 500);
+        }
+    }
 }

@@ -6,8 +6,9 @@ import { BreadcrumbItem, PaginatedResponse, PdfSummary } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Calendar, ChevronDown, Copy, Check, Download, ExternalLink, FileText, Inbox, Loader2, Share2, Sparkles } from 'lucide-react';
+import { Calendar, ChevronDown, Copy, Check, Download, ExternalLink, FileText, Inbox, Loader2, MessageSquare, Share2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import PdfChatModal from '@/components/PdfChatModal';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -121,6 +122,7 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
     );
     const [isSharing, setIsSharing] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [showChat, setShowChat] = useState(false);
 
     const handleShare = async () => {
         setIsSharing(true);
@@ -249,8 +251,24 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
                             </a>
                         </>
                     )}
+                    {/* Chat with PDF button */}
+                    <button
+                        type="button"
+                        onClick={() => setShowChat(true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 shadow-xs transition-all hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+                    >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span>Chat</span>
+                    </button>
                 </div>
             </div>
+
+            <PdfChatModal
+                show={showChat}
+                summary={summary.summary}
+                filename={summary.filename}
+                onClose={() => setShowChat(false)}
+            />
 
             <div className="mt-4 rounded-2xl bg-slate-50/80 p-4 dark:bg-white/5">
                 <p className={`text-sm leading-relaxed text-slate-700 dark:text-slate-300 ${expanded ? '' : 'line-clamp-3'}`}>

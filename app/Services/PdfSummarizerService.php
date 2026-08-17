@@ -423,6 +423,97 @@ class PdfSummarizerService
     }
 
     /**
+     * Answer user questions grounded in a PDF summary context.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    public function chatWithPdf(string $question, string $contextSummary, array $history = []): string
+    {
+        $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
+
+        if (! empty($apiKey)) {
+            try {
+                $messages = [
+                    [
+                        'role' => 'system',
+                        'content' => "You are an intelligent PDF Q&A Assistant. Answer the user's question accurately based ONLY on the following PDF document context:\n\nDOCUMENT CONTEXT:\n{$contextSummary}\n\nInstructions: Be helpful, clear, and direct. Use plain text formatting.",
+                    ],
+                ];
+
+                foreach (array_slice($history, -6) as $msg) {
+                    if (isset($msg['role'], $msg['content']) && in_array($msg['role'], ['user', 'assistant'], true)) {
+                        $messages[] = [
+                            'role' => $msg['role'],
+                            'content' => (string) $msg['content'],
+                        ];
+                    }
+                }
+
+                $messages[] = [
+                    'role' => 'user',
+                    'content' => $question,
+                ];
+
+                $response = Http::timeout(45)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer '.$apiKey,
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post('https://openrouter.ai/api/v1/chat/completions', [
+                        'model' => 'openai/gpt-4o-mini',
+                        'messages' => $messages,
+                    ]);
+
+                if ($response->ok()) {
+                    $data = $response->json();
+                    $answer = $data['choices'][0]['message']['content'] ?? null;
+                    if (! empty($answer)) {
+                        return $answer;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('OpenRouter API call for chat failed, using fallback: '.$e->getMessage());
+            }
+        }
+
+        // Algorithmic fallback response
+        return $this->fallbackChatResponse($question, $contextSummary);
+    }
+
+    /**
+     * Fallback response generator when AI API key is not present.
+     */
+    protected function fallbackChatResponse(string $question, string $context): string
+    {
+        $q = strtolower($question);
+        $lines = array_filter(array_map('trim', explode("\n", $context)));
+
+        if (str_contains($q, 'main point') || str_contains($q, 'summary') || str_contains($q, 'about')) {
+            return "Based on the document context, here is the core overview:\n\n".implode("\n\n", array_slice($lines, 0, min(3, count($lines))));
+        }
+
+        if (str_contains($q, 'who') || str_contains($q, 'author') || str_contains($q, 'creator')) {
+            foreach ($lines as $line) {
+                if (preg_match('/(by|author|written|created|publisher|foundation)/i', $line)) {
+                    return "According to the document: {$line}";
+                }
+            }
+        }
+
+        // Return most relevant matching line or standard excerpt
+        foreach ($lines as $line) {
+            $words = array_filter(explode(' ', preg_replace('/[^a-zA-Z0-9 ]/', '', $q)));
+            foreach ($words as $word) {
+                if (strlen($word) > 4 && stripos($line, $word) !== false) {
+                    return "Regarding your question, the document mentions: {$line}";
+                }
+            }
+        }
+
+        return "Based on the document provided:\n\n".($lines[0] ?? $context);
+    }
+
+    /**
      * Safely extract raw text from PDF file.
      */
     protected function extractTextFromPdf(string $filePath): string
