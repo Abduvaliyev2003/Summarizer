@@ -46,11 +46,58 @@ export default function SummaryModal({
     const [translatedText, setTranslatedText] = useState<string | null>(null);
     const [isTranslating, setIsTranslating] = useState(false);
 
+    // Synchronized scrolling refs
+    const leftScrollRef = useRef<HTMLDivElement>(null);
+    const rightScrollRef = useRef<HTMLDivElement>(null);
+    const isSyncingScroll = useRef(false);
+
+    const handleLeftScroll = () => {
+        if (isSyncingScroll.current) return;
+        if (leftScrollRef.current && rightScrollRef.current) {
+            isSyncingScroll.current = true;
+            const percentage =
+                leftScrollRef.current.scrollTop /
+                (leftScrollRef.current.scrollHeight - leftScrollRef.current.clientHeight || 1);
+            rightScrollRef.current.scrollTop =
+                percentage * (rightScrollRef.current.scrollHeight - rightScrollRef.current.clientHeight);
+            setTimeout(() => {
+                isSyncingScroll.current = false;
+            }, 50);
+        }
+    };
+
+    const handleRightScroll = () => {
+        if (isSyncingScroll.current) return;
+        if (leftScrollRef.current && rightScrollRef.current) {
+            isSyncingScroll.current = true;
+            const percentage =
+                rightScrollRef.current.scrollTop /
+                (rightScrollRef.current.scrollHeight - rightScrollRef.current.clientHeight || 1);
+            leftScrollRef.current.scrollTop =
+                percentage * (leftScrollRef.current.scrollHeight - leftScrollRef.current.clientHeight);
+            setTimeout(() => {
+                isSyncingScroll.current = false;
+            }, 50);
+        }
+    };
+
     useEffect(() => {
         setDisplaySummary(summary);
         setTranslatedText(null);
         setShowDualView(false);
     }, [summary]);
+
+    // Keyboard shortcut to close on Escape
+    useEffect(() => {
+        if (!show) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [show, onClose]);
 
     const handleFetchDualTranslation = async (lang: string) => {
         setIsTranslating(true);
@@ -125,9 +172,7 @@ export default function SummaryModal({
     const handleCopy = async () => {
         try {
             await navigator.clipboard.writeText(displaySummary);
-
             setCopied(true);
-
             setTimeout(() => {
                 setCopied(false);
             }, 2000);
@@ -138,23 +183,17 @@ export default function SummaryModal({
 
     // Download TXT
     const handleDownload = () => {
-        const fileName =
-            filename?.replace(/\.pdf$/i, '') || 'summary';
-
+        const fileName = filename?.replace(/\.pdf$/i, '') || 'summary';
         const blob = new Blob([displaySummary], {
             type: 'text/plain;charset=utf-8',
         });
-
         const url = URL.createObjectURL(blob);
-
         const link = document.createElement('a');
         link.href = url;
         link.download = `${fileName}_summary.txt`;
-
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         URL.revokeObjectURL(url);
     };
 
@@ -165,16 +204,11 @@ export default function SummaryModal({
         }
 
         setExporting(true);
-
         let exportContainer: HTMLDivElement | null = null;
 
         try {
-            const fileName =
-                filename?.replace(/\.pdf$/i, '') || 'summary';
-
-            // Create temporary PDF container
+            const fileName = filename?.replace(/\.pdf$/i, '') || 'summary';
             exportContainer = document.createElement('div');
-
             exportContainer.style.position = 'fixed';
             exportContainer.style.left = '-99999px';
             exportContainer.style.top = '0';
@@ -185,51 +219,27 @@ export default function SummaryModal({
             exportContainer.style.color = '#334155';
             exportContainer.style.boxSizing = 'border-box';
 
-            // Header
             const header = document.createElement('div');
-
             header.innerHTML = `
-                <h1 style="
-                    font-size: 28px;
-                    font-weight: 700;
-                    color: #111827;
-                    margin: 0 0 8px 0;
-                ">
-                    Summary
-                </h1>
-
-                <p style="
-                    font-size: 14px;
-                    color: #64748b;
-                    margin: 0 0 32px 0;
-                ">
-                    ${escapeHtml(filename)}
-                </p>
+                <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0;">Summary</h1>
+                <p style="font-size: 14px; color: #64748b; margin: 0 0 32px 0;">${escapeHtml(filename)}</p>
             `;
-
             exportContainer.appendChild(header);
 
-            // Summary content
             const content = document.createElement('div');
-
             displaySummary.split('\n').forEach((line) => {
                 const paragraph = document.createElement('p');
-
                 paragraph.textContent = line || '\u00A0';
-
                 paragraph.style.fontSize = '16px';
                 paragraph.style.lineHeight = '1.7';
                 paragraph.style.color = '#334155';
                 paragraph.style.margin = '0 0 14px 0';
-
                 content.appendChild(paragraph);
             });
-
             exportContainer.appendChild(content);
 
             document.body.appendChild(exportContainer);
 
-            // Wait for browser rendering
             await new Promise((resolve) => {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(resolve);
@@ -243,7 +253,6 @@ export default function SummaryModal({
             });
 
             const imgData = canvas.toDataURL('image/png');
-
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
@@ -252,47 +261,19 @@ export default function SummaryModal({
 
             const pageWidth = 210;
             const pageHeight = 297;
-
             const margin = 10;
-
             const contentWidth = pageWidth - margin * 2;
-
-            const imageHeight =
-                (canvas.height * contentWidth) / canvas.width;
-
+            const imageHeight = (canvas.height * contentWidth) / canvas.width;
             let heightLeft = imageHeight;
             let position = margin;
 
-            // First page
-            pdf.addImage(
-                imgData,
-                'PNG',
-                margin,
-                position,
-                contentWidth,
-                imageHeight
-            );
-
+            pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imageHeight);
             heightLeft -= pageHeight - margin * 2;
 
-            // Additional pages
             while (heightLeft > 0) {
-                position =
-                    heightLeft -
-                    imageHeight +
-                    margin;
-
+                position = heightLeft - imageHeight + margin;
                 pdf.addPage();
-
-                pdf.addImage(
-                    imgData,
-                    'PNG',
-                    margin,
-                    position,
-                    contentWidth,
-                    imageHeight
-                );
-
+                pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imageHeight);
                 heightLeft -= pageHeight - margin * 2;
             }
 
@@ -303,7 +284,6 @@ export default function SummaryModal({
             if (exportContainer) {
                 exportContainer.remove();
             }
-
             setExporting(false);
         }
     };
@@ -311,57 +291,70 @@ export default function SummaryModal({
     return (
         <>
             <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md transition-opacity duration-300"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="summary-modal-title"
             >
-                {/* everything from line 269 to 503 unchanged */}
-                <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-
+                <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
                     {/* Header */}
-                    <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5 sm:px-8">
+                    <div className="animate-gradient-x flex shrink-0 items-center justify-between bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 bg-[length:200%_100%] px-6 py-5 sm:px-8">
                         <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md">
                                 <CheckCircle2 className="h-6 w-6 text-white" />
                             </div>
 
                             <div className="min-w-0">
                                 <h2
                                     id="summary-modal-title"
-                                    className="text-lg font-semibold text-white"
+                                    className="text-lg font-bold text-white"
                                 >
                                     Summary Generated
                                 </h2>
 
-                                <p className="truncate text-sm text-white/75">
+                                <p className="truncate text-sm text-white/80">
                                     {filename || 'Document'}
                                 </p>
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-lg p-2 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/50"
-                            aria-label="Close summary"
-                        >
-                            <X className="h-6 w-6" />
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <span className="hidden sm:inline-flex items-center rounded-lg bg-white/10 px-2.5 py-1 font-mono text-xs font-semibold text-white/90 backdrop-blur-sm border border-white/15">
+                                Esc
+                            </span>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="rounded-xl p-2 text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/50"
+                                aria-label="Close summary"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Content */}
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8">
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/50 sm:p-8">
                         <div
                             ref={summaryRef}
-                            className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+                            className="relative rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8"
                         >
-                            <div className="mb-6 border-b border-slate-200 pb-5">
+                            {/* Shimmer skeleton overlay during AI rewriting */}
+                            {isRewriting && (
+                                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
+                                    <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400 font-bold text-sm">
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        <span>AI is rewriting your summary ({activeMode})...</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="mb-6 border-b border-slate-200 pb-5 dark:border-slate-800">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <div className="mb-1 flex items-center gap-2">
-                                            <FileText className="h-5 w-5 text-violet-600" />
-                                            <h3 className="text-xl font-semibold text-slate-900">
+                                            <FileText className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                                                 {displaySummary.includes('=== COMPARATIVE MATRIX ===')
                                                     ? '⚔️ Multi-PDF Comparison Matrix'
                                                     : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===')
@@ -369,7 +362,7 @@ export default function SummaryModal({
                                                     : 'Summary'}
                                             </h3>
                                         </div>
-                                        <p className="text-sm text-slate-500">
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">
                                             {filename || 'Document'}
                                         </p>
                                     </div>
@@ -377,79 +370,36 @@ export default function SummaryModal({
                                     {/* AI Rewrite Action Toolbar */}
                                     {!displaySummary.includes('=== COMPARATIVE MATRIX ===') &&
                                      !displaySummary.includes('=== FLASHCARDS ===') && (
-                                        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-violet-600 px-2">
+                                        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800/80">
+                                            <span className="flex items-center gap-1 px-2 text-[11px] font-bold text-violet-600 dark:text-violet-400">
                                                 <Sparkles className="h-3.5 w-3.5" />
                                                 Rewrite:
                                             </span>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRewrite('simpler')}
-                                                disabled={isRewriting}
-                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                    activeMode === 'simpler'
-                                                        ? 'bg-violet-600 text-white'
-                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                                }`}
-                                            >
-                                                {isRewriting && activeMode === 'simpler' ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
-                                                ) : (
-                                                    '🐣 Simpler'
-                                                )}
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRewrite('professional')}
-                                                disabled={isRewriting}
-                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                    activeMode === 'professional'
-                                                        ? 'bg-violet-600 text-white'
-                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                                }`}
-                                            >
-                                                {isRewriting && activeMode === 'professional' ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
-                                                ) : (
-                                                    '💼 Professional'
-                                                )}
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRewrite('shorter')}
-                                                disabled={isRewriting}
-                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                    activeMode === 'shorter'
-                                                        ? 'bg-violet-600 text-white'
-                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                                }`}
-                                            >
-                                                {isRewriting && activeMode === 'shorter' ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
-                                                ) : (
-                                                    '⚡ Shorter'
-                                                )}
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRewrite('bullets')}
-                                                disabled={isRewriting}
-                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
-                                                    activeMode === 'bullets'
-                                                        ? 'bg-violet-600 text-white'
-                                                        : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
-                                                }`}
-                                            >
-                                                {isRewriting && activeMode === 'bullets' ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin inline" />
-                                                ) : (
-                                                    '📋 Bullets'
-                                                )}
-                                            </button>
+                                            {[
+                                                { mode: 'simpler', label: '🐣 Simpler' },
+                                                { mode: 'professional', label: '💼 Professional' },
+                                                { mode: 'shorter', label: '⚡ Shorter' },
+                                                { mode: 'bullets', label: '📋 Bullets' },
+                                            ].map((btn) => (
+                                                <button
+                                                    key={btn.mode}
+                                                    type="button"
+                                                    onClick={() => handleRewrite(btn.mode as any)}
+                                                    disabled={isRewriting}
+                                                    className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
+                                                        activeMode === btn.mode
+                                                            ? 'bg-violet-600 text-white shadow-sm'
+                                                            : 'bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                                                    }`}
+                                                >
+                                                    {isRewriting && activeMode === btn.mode ? (
+                                                        <Loader2 className="inline h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        btn.label
+                                                    )}
+                                                </button>
+                                            ))}
 
                                             <button
                                                 type="button"
@@ -460,10 +410,10 @@ export default function SummaryModal({
                                                         handleFetchDualTranslation(dualTargetLang);
                                                     }
                                                 }}
-                                                className={`rounded-xl px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                                                className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-semibold transition ${
                                                     showDualView
                                                         ? 'bg-indigo-600 text-white shadow-sm'
-                                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300'
+                                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300'
                                                 }`}
                                             >
                                                 <Globe className="h-3 w-3" />
@@ -479,19 +429,23 @@ export default function SummaryModal({
                             ) : displaySummary.includes('=== FLASHCARDS ===') || displaySummary.includes('=== EXAM QUIZ ===') || displaySummary.includes('=== KEY CONCEPTS ===') ? (
                                 <StudySuiteViewer rawContent={displaySummary} />
                             ) : showDualView ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                                     {/* Left Column: Original Summary */}
                                     <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
                                         <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
                                             <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                                                <FileText className="h-4 w-4 text-violet-600" />
+                                                <FileText className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                                                 Original Summary
                                             </span>
                                             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                                                 Primary
                                             </span>
                                         </div>
-                                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                                        <div
+                                            ref={leftScrollRef}
+                                            onScroll={handleLeftScroll}
+                                            className="max-h-[50vh] space-y-3 overflow-y-auto pr-1"
+                                        >
                                             {displaySummary.split('\n').map((line, index) => (
                                                 <p key={index} className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
                                                     {line || '\u00A0'}
@@ -528,7 +482,11 @@ export default function SummaryModal({
                                                 <p className="text-xs font-semibold">Translating side-by-side into {DUAL_LANGUAGES.find(l => l.code === dualTargetLang)?.name}...</p>
                                             </div>
                                         ) : (
-                                            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                                            <div
+                                                ref={rightScrollRef}
+                                                onScroll={handleRightScroll}
+                                                className="max-h-[50vh] space-y-3 overflow-y-auto pr-1"
+                                            >
                                                 {translatedText ? (
                                                     translatedText.split('\n').map((line, index) => (
                                                         <p key={index} className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
@@ -536,7 +494,7 @@ export default function SummaryModal({
                                                         </p>
                                                     ))
                                                 ) : (
-                                                    <p className="text-xs text-slate-400 italic">Select a language to load parallel translation.</p>
+                                                    <p className="text-xs italic text-slate-400">Select a language to load parallel translation.</p>
                                                 )}
                                             </div>
                                         )}
@@ -547,7 +505,7 @@ export default function SummaryModal({
                                     {displaySummary.split('\n').map((line, index) => (
                                         <p
                                             key={index}
-                                            className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700"
+                                            className="whitespace-pre-wrap text-[15px] leading-7 text-slate-700 dark:text-slate-300"
                                         >
                                             {line || '\u00A0'}
                                         </p>
@@ -558,19 +516,18 @@ export default function SummaryModal({
                     </div>
 
                     {/* Footer */}
-                    <div className="flex shrink-0 flex-col gap-4 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-
+                    <div className="flex shrink-0 flex-col gap-4 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                         {/* Export actions */}
                         <div className="flex flex-wrap gap-2">
                             {/* Copy */}
                             <button
                                 type="button"
                                 onClick={handleCopy}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                             >
                                 {copied ? (
                                     <>
-                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                         Copied!
                                     </>
                                 ) : (
@@ -585,7 +542,7 @@ export default function SummaryModal({
                             <button
                                 type="button"
                                 onClick={handleDownload}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                             >
                                 <Download className="h-4 w-4" />
                                 Download TXT
@@ -596,13 +553,10 @@ export default function SummaryModal({
                                 type="button"
                                 onClick={handleExportPDF}
                                 disabled={exporting}
-                                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 <FileText className="h-4 w-4" />
-
-                                {exporting
-                                    ? 'Exporting...'
-                                    : 'Export as PDF'}
+                                {exporting ? 'Exporting...' : 'Export as PDF'}
                             </button>
                         </div>
 
@@ -611,7 +565,7 @@ export default function SummaryModal({
                             <button
                                 type="button"
                                 onClick={() => setShowChat(true)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-medium text-violet-700 transition hover:bg-violet-100"
+                                className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-900/60"
                             >
                                 <MessageSquare className="h-4 w-4" />
                                 Chat with PDF
@@ -620,14 +574,14 @@ export default function SummaryModal({
                             <button
                                 type="button"
                                 onClick={onNewUpload}
-                                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                             >
                                 New Upload
                             </button>
 
                             <Link
                                 href="/history"
-                                className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                                className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                             >
                                 View History
                             </Link>
