@@ -578,27 +578,36 @@ class PdfSummarizerService
     }
 
     /**
-     * Safely extract raw text from PDF file.
+     * Safely extract raw text from PDF file with pdftotext CLI fallback.
      */
     protected function extractTextFromPdf(string $filePath): string
     {
+        $text = '';
+
         try {
             $parser = new Parser;
             $pdf = $parser->parseFile($filePath);
             $text = trim($pdf->getText());
-
-            if ($text === '' && app()->environment('testing')) {
-                return 'Sample PDF document text for testing summarization.';
-            }
-
-            return $text;
         } catch (\Exception $e) {
-            if (app()->environment('testing')) {
-                return 'Sample PDF document text for testing summarization.';
-            }
-
-            throw $e;
+            Log::warning('Smalot PDF Parser failed, trying pdftotext CLI fallback: '.$e->getMessage());
         }
+
+        // Fallback to native pdftotext CLI tool if PHP parser returned empty text
+        if ($text === '' && function_exists('exec')) {
+            $escapedPath = escapeshellarg($filePath);
+            $output = [];
+            $returnCode = 0;
+            @exec("pdftotext {$escapedPath} - 2>/dev/null", $output, $returnCode);
+            if ($returnCode === 0 && ! empty($output)) {
+                $text = trim(implode("\n", $output));
+            }
+        }
+
+        if ($text === '' && app()->environment('testing')) {
+            return 'Sample PDF document text for testing summarization.';
+        }
+
+        return $text;
     }
 
     /**
