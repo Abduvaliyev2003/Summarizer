@@ -198,12 +198,30 @@ export default function StudySuiteViewer({ rawContent }: StudySuiteViewerProps) 
                     </div>
 
                     {/* 3D Flip Container */}
-                    <div onClick={() => setIsFlipped(!isFlipped)}
-                        className="perspective-1000 relative h-72 w-full max-w-md cursor-pointer select-none">
-                        <div className={`preserve-3d relative h-full w-full transition-transform duration-500 ${isFlipped ? 'rotate-y-180' : ''}`}>
-
+                    <div
+                        onClick={() => setIsFlipped(!isFlipped)}
+                        className="perspective-1000 relative h-72 w-full max-w-md cursor-pointer select-none"
+                        style={{ perspective: '1000px', WebkitPerspective: '1000px' }}
+                    >
+                        <div
+                            className="preserve-3d relative h-full w-full transition-transform duration-500"
+                            style={{
+                                transformStyle: 'preserve-3d',
+                                WebkitTransformStyle: 'preserve-3d',
+                                transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                            }}
+                        >
                             {/* Front — Question */}
-                            <div className="backface-hidden absolute inset-0 flex flex-col justify-between rounded-3xl border border-purple-200 bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-8 shadow-xl dark:border-purple-500/30 dark:from-slate-900 dark:via-purple-950/20 dark:to-slate-900">
+                            <div
+                                className={`backface-hidden absolute inset-0 flex flex-col justify-between rounded-3xl border border-purple-200 bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-8 shadow-xl dark:border-purple-500/30 dark:from-slate-900 dark:via-purple-950/20 dark:to-slate-900 transition-opacity duration-300 ${
+                                    isFlipped ? 'pointer-events-none opacity-0' : 'opacity-100'
+                                }`}
+                                style={{
+                                    backfaceVisibility: 'hidden',
+                                    WebkitBackfaceVisibility: 'hidden',
+                                    transform: 'rotateY(0deg) translateZ(1px)',
+                                }}
+                            >
                                 <div className="flex items-center justify-between">
                                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">❓ QUESTION</span>
                                     <Sparkles className="h-4 w-4 text-purple-400 animate-pulse" />
@@ -217,7 +235,16 @@ export default function StudySuiteViewer({ rawContent }: StudySuiteViewerProps) 
                             </div>
 
                             {/* Back — Answer */}
-                            <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col justify-between rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-8 shadow-xl dark:border-emerald-500/30 dark:from-slate-900 dark:via-emerald-950/20 dark:to-slate-900">
+                            <div
+                                className={`backface-hidden absolute inset-0 flex flex-col justify-between rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-8 shadow-xl dark:border-emerald-500/30 dark:from-slate-900 dark:via-emerald-950/20 dark:to-slate-900 transition-opacity duration-300 ${
+                                    !isFlipped ? 'pointer-events-none opacity-0' : 'opacity-100'
+                                }`}
+                                style={{
+                                    backfaceVisibility: 'hidden',
+                                    WebkitBackfaceVisibility: 'hidden',
+                                    transform: 'rotateY(180deg) translateZ(1px)',
+                                }}
+                            >
                                 <div className="flex items-center justify-between">
                                     <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">💡 ANSWER</span>
                                     <CheckCircle2 className="h-4 w-4 text-emerald-400" />
