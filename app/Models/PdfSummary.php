@@ -20,6 +20,8 @@ class PdfSummary extends Model
         'file_size',
         'share_token',
         'is_shared',
+        'status',
+        'error_message',
     ];
 
     public function user()

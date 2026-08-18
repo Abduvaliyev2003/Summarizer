@@ -2,9 +2,14 @@
 
 namespace App\Services;
 
+use App\DTOs\ChatWithPdfDTO;
+use App\DTOs\ComparePdfsDTO;
+use App\DTOs\RewriteSummaryDTO;
+use App\DTOs\SummarizePdfDTO;
 use App\Models\PdfSummary;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -43,13 +48,103 @@ class PdfSummarizerService
         'tr' => 'Turkish (Türkçe)',
     ];
 
+    // ... (rest of methods)
+
+    /**
+     * Parse text from PDF and request AI summary in the target language (with MD5 content caching).
+     */
+    protected function extractAndSummarizeText(string $filePath, string $summaryType, string $targetLanguage): string
+    {
+        $this->validatePdfMagicBytes($filePath);
+
+        $fileHash = md5_file($filePath) ?: md5($filePath);
+        $cacheKey = "pdf_summary_v2_{$fileHash}_{$summaryType}_{$targetLanguage}";
+
+        return Cache::remember($cacheKey, now()->addDays(7), function () use ($filePath, $summaryType, $targetLanguage) {
+            $text = $this->extractTextFromPdf($filePath);
+            $text = mb_substr($text, 0, 12000);
+
+            if ($text === '') {
+                throw new InvalidArgumentException('Unable to extract text from the PDF file.', 422);
+            }
+
+            $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
+            if (empty($apiKey)) {
+                if (app()->environment('testing')) {
+                    return 'Sample PDF document summary generated for testing environment.';
+                }
+
+                Log::error('OpenRouter API Key is not set.');
+                throw new RuntimeException('OpenRouter API Key is not set.', 500);
+            }
+
+            $userPrompt = $this->prompts[$summaryType] ?? $this->prompts['default'];
+            $langName = $this->languages[$targetLanguage] ?? 'English';
+
+            $response = Http::timeout(60)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://openrouter.ai/api/v1/chat/completions', [
+                    'model' => 'openai/gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are a professional PDF summarizer. Provide clear, well-formatted summaries without using markdown formatting, asterisks, or special characters. Use plain text with proper paragraphs. CRITICAL INSTRUCTION: You MUST write the ENTIRE summary in {$langName} language.",
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => "{$userPrompt} in {$langName}:\n\n{$text}",
+                        ],
+                    ],
+                ]);
+
+            if (! $response->ok()) {
+                Log::error('OpenRouter API error', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Failed to generate summary. Please try again later.';
+                $statusCode = $response->status() >= 500 ? 502 : 422;
+
+                throw new RuntimeException($errorMessage, $statusCode);
+            }
+
+            $data = $response->json();
+            $summaryText = $data['choices'][0]['message']['content'] ?? null;
+
+            if (empty($summaryText)) {
+                Log::error('OpenRouter API response missing content', ['response' => $data]);
+                throw new RuntimeException('Unable to generate summary. Please try again later.', 500);
+            }
+
+            return $summaryText;
+        });
+    }
+
     /**
      * Process and summarize the given uploaded PDF file for a user.
      *
      * @return array{summary: string, id: int, pdfCount: int, targetLanguage: string}
      */
-    public function summarize(UploadedFile $file, User $user, string $summaryType = 'default', string $targetLanguage = 'en'): array
+    public function summarize(SummarizePdfDTO|UploadedFile $fileOrDto, ?User $user = null, string $summaryType = 'default', string $targetLanguage = 'en'): array
     {
+        if ($fileOrDto instanceof SummarizePdfDTO) {
+            $file = $fileOrDto->file;
+            $user = $fileOrDto->user;
+            $summaryType = $fileOrDto->summaryType;
+            $targetLanguage = $fileOrDto->targetLanguage;
+        } else {
+            $file = $fileOrDto;
+        }
+
+        if (! $file || ! $user) {
+            throw new InvalidArgumentException('Valid PDF file and user are required.', 422);
+        }
+
         if (! $user->canSummarizePdf()) {
             throw new RuntimeException('You have reached your PDF limit for this month. Please upgrade your plan to continue using our service.', 403);
         }
@@ -71,6 +166,7 @@ class PdfSummarizerService
             ]);
 
             $user->increment('pdf_count');
+            DashboardStatsService::clearDashboardCache($user->id);
 
             return [
                 'summary' => $summaryText,
@@ -141,6 +237,7 @@ class PdfSummarizerService
                 ]);
 
                 $user->increment('pdf_count');
+                DashboardStatsService::clearDashboardCache($user->id);
 
                 return [
                     'summary' => $summaryText,
@@ -164,11 +261,23 @@ class PdfSummarizerService
     /**
      * Compare and synthesize 2 to 3 PDF documents.
      *
-     * @param  array<int, UploadedFile>  $files
+     * @param  array<int, UploadedFile>|ComparePdfsDTO  $filesOrDto
      * @return array{summary: string, id: int, pdfCount: int, targetLanguage: string, filenames: array<int, string>}
      */
-    public function comparePdfs(array $files, User $user, string $targetLanguage = 'en'): array
+    public function comparePdfs(ComparePdfsDTO|array $filesOrDto, ?User $user = null, string $targetLanguage = 'en'): array
     {
+        if ($filesOrDto instanceof ComparePdfsDTO) {
+            $files = $filesOrDto->files;
+            $user = $filesOrDto->user;
+            $targetLanguage = $filesOrDto->targetLanguage;
+        } else {
+            $files = $filesOrDto;
+        }
+
+        if (! $user) {
+            throw new InvalidArgumentException('User instance is required for comparison.', 422);
+        }
+
         if (! $user->canSummarizePdf()) {
             throw new RuntimeException('You have reached your PDF limit for this month. Please upgrade your plan to continue using our service.', 403);
         }
@@ -265,6 +374,7 @@ class PdfSummarizerService
             ]);
 
             $user->increment('pdf_count');
+            DashboardStatsService::clearDashboardCache($user->id);
 
             return [
                 'summary' => $comparisonResult,
@@ -283,81 +393,18 @@ class PdfSummarizerService
     }
 
     /**
-     * Parse text from PDF and request AI summary in the target language.
-     */
-    protected function extractAndSummarizeText(string $filePath, string $summaryType, string $targetLanguage): string
-    {
-        $this->validatePdfMagicBytes($filePath);
-
-        $text = $this->extractTextFromPdf($filePath);
-
-        $text = mb_substr($text, 0, 12000);
-
-        if ($text === '') {
-            throw new InvalidArgumentException('Unable to extract text from the PDF file.', 422);
-        }
-
-        $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
-        if (empty($apiKey)) {
-            if (app()->environment('testing')) {
-                return 'Sample PDF document summary generated for testing environment.';
-            }
-
-            Log::error('OpenRouter API Key is not set.');
-            throw new RuntimeException('OpenRouter API Key is not set.', 500);
-        }
-
-        $userPrompt = $this->prompts[$summaryType] ?? $this->prompts['default'];
-        $langName = $this->languages[$targetLanguage] ?? 'English';
-
-        $response = Http::timeout(60)
-            ->withHeaders([
-                'Authorization' => 'Bearer '.$apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post('https://openrouter.ai/api/v1/chat/completions', [
-                'model' => 'openai/gpt-4o-mini',
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => "You are a professional PDF summarizer. Provide clear, well-formatted summaries without using markdown formatting, asterisks, or special characters. Use plain text with proper paragraphs. CRITICAL INSTRUCTION: You MUST write the ENTIRE summary in {$langName} language.",
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => "{$userPrompt} in {$langName}:\n\n{$text}",
-                    ],
-                ],
-            ]);
-
-        if (! $response->ok()) {
-            Log::error('OpenRouter API error', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-
-            $errorData = $response->json();
-            $errorMessage = $errorData['error']['message'] ?? 'Failed to generate summary. Please try again later.';
-            $statusCode = $response->status() >= 500 ? 502 : 422;
-
-            throw new RuntimeException($errorMessage, $statusCode);
-        }
-
-        $data = $response->json();
-        $summaryText = $data['choices'][0]['message']['content'] ?? null;
-
-        if (empty($summaryText)) {
-            Log::error('OpenRouter API response missing content', ['response' => $data]);
-            throw new RuntimeException('Unable to generate summary. Please try again later.', 500);
-        }
-
-        return $summaryText;
-    }
-
-    /**
      * Rewrite and improve an existing summary text according to a specific mode.
      */
-    public function rewriteSummary(string $currentSummary, string $mode = 'simpler', string $targetLanguage = 'en'): string
+    public function rewriteSummary(RewriteSummaryDTO|string $summaryOrDto, string $mode = 'simpler', string $targetLanguage = 'en'): string
     {
+        if ($summaryOrDto instanceof RewriteSummaryDTO) {
+            $currentSummary = $summaryOrDto->summary;
+            $mode = $summaryOrDto->mode;
+            $targetLanguage = $summaryOrDto->targetLanguage;
+        } else {
+            $currentSummary = $summaryOrDto;
+        }
+
         $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
 
         if (empty($apiKey)) {
@@ -437,8 +484,15 @@ class PdfSummarizerService
      *
      * @param  array<int, array{role: string, content: string}>  $history
      */
-    public function chatWithPdf(string $question, string $contextSummary, array $history = []): string
+    public function chatWithPdf(ChatWithPdfDTO|string $questionOrDto, string $contextSummary = '', array $history = []): string
     {
+        if ($questionOrDto instanceof ChatWithPdfDTO) {
+            $question = $questionOrDto->question;
+            $contextSummary = $questionOrDto->contextSummary;
+            $history = $questionOrDto->history;
+        } else {
+            $question = $questionOrDto;
+        }
         $apiKey = config('services.openrouter.key') ?? config('services.openrouter.api_key') ?? env('OPENROUTER_API_KEY');
 
         if (! empty($apiKey)) {

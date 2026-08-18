@@ -14,6 +14,8 @@ import {
     Trophy,
 } from 'lucide-react';
 
+import { useQuizState } from '@/hooks/useQuizState';
+
 interface StudySuiteViewerProps {
     rawContent: string;
 }
@@ -48,11 +50,7 @@ function ConfettiBurst() {
 
 export default function StudySuiteViewer({ rawContent }: StudySuiteViewerProps) {
     const [activeTab, setActiveTab] = useState<'concepts' | 'quiz' | 'flashcards'>('flashcards');
-    const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [showAnswers, setShowAnswers] = useState(false);
-    const [correctCount, setCorrectCount] = useState(0);
-    const [shakingId, setShakingId] = useState<number | null>(null);
-    const [burstId, setBurstId] = useState<number | null>(null);
     const [currentCardIndex, setCurrentCardIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
@@ -124,22 +122,17 @@ export default function StudySuiteViewer({ rawContent }: StudySuiteViewerProps) 
         return { concepts: conceptsText.trim(), quizzes: quizItems, flashcards: flashcardItems };
     }, [rawContent]);
 
-    const currentCard = parsedData.flashcards[currentCardIndex] || { id: 1, question: 'No flashcards parsed.', answer: 'Please review the summary output.' };
+    const {
+        selectedAnswers,
+        correctCount,
+        shakingId,
+        burstId,
+        answeredCount,
+        totalQuizzes,
+        handleOptionSelect,
+    } = useQuizState(parsedData.quizzes);
 
-    const handleOptionSelect = (qId: number, optionKey: string) => {
-        if (selectedAnswers[qId]) { return; }
-        const quiz = parsedData.quizzes.find((q) => q.id === qId);
-        const isCorrect = quiz?.correctAnswer === optionKey;
-        setSelectedAnswers((prev) => ({ ...prev, [qId]: optionKey }));
-        if (isCorrect) {
-            setCorrectCount((c) => c + 1);
-            setBurstId(qId);
-            setTimeout(() => setBurstId(null), 900);
-        } else {
-            setShakingId(qId);
-            setTimeout(() => setShakingId(null), 450);
-        }
-    };
+    const currentCard = parsedData.flashcards[currentCardIndex] || { id: 1, question: 'No flashcards parsed.', answer: 'Please review the summary output.' };
 
     const navigateCard = useCallback((direction: 'next' | 'prev') => {
         if (isAnimating) { return; }
@@ -164,9 +157,6 @@ export default function StudySuiteViewer({ rawContent }: StudySuiteViewerProps) 
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [activeTab, navigateCard]);
-
-    const answeredCount = Object.keys(selectedAnswers).length;
-    const totalQuizzes = parsedData.quizzes.length;
 
     return (
         <div className="flex flex-col gap-6">

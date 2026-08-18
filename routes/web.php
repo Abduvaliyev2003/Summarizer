@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PDFSummarizeController;
 use App\Http\Controllers\PdfSummaryController;
 use App\Http\Controllers\ShareController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,9 @@ use Illuminate\Support\Facades\Route;
 // Public landing & checkout routes
 Route::get('/', WelcomeController::class)->name('home');
 Route::get('/checkout/{plan_slug}', CheckoutController::class)->name('checkout');
+
+// Public Stripe Webhook Endpoint (CSRF Exempted)
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])->name('stripe.webhook');
 
 // Public shared summary view
 Route::get('/s/{token}', [ShareController::class, 'show'])->name('share.show');
@@ -50,6 +54,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/pdf/chat', [PDFSummarizeController::class, 'chat'])
         ->middleware('throttle:15,1')
         ->name('pdf.chat');
+
+    // Async PDF Summary Status Polling endpoint
+    Route::get('/pdf/status/{summary}', [PDFSummarizeController::class, 'status'])
+        ->name('pdf.status');
 
     // Subscription management routes (rate limited to 20 requests per minute)
     Route::prefix('subscription')->middleware('throttle:20,1')->as('subscription.')->group(function () {

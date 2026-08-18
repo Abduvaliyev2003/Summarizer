@@ -1,9 +1,10 @@
 import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, MessageSquare, Globe } from 'lucide-react';
 import { Link } from '@inertiajs/react';
-import { useRef, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
 import PdfComparisonViewer from '@/components/PdfComparisonViewer';
 import PdfChatModal from '@/components/PdfChatModal';
+import { useDualViewScroll } from '@/hooks/useDualViewScroll';
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -46,40 +47,8 @@ export default function SummaryModal({
     const [translatedText, setTranslatedText] = useState<string | null>(null);
     const [isTranslating, setIsTranslating] = useState(false);
 
-    // Synchronized scrolling refs
-    const leftScrollRef = useRef<HTMLDivElement>(null);
-    const rightScrollRef = useRef<HTMLDivElement>(null);
-    const isSyncingScroll = useRef(false);
-
-    const handleLeftScroll = () => {
-        if (isSyncingScroll.current) return;
-        if (leftScrollRef.current && rightScrollRef.current) {
-            isSyncingScroll.current = true;
-            const percentage =
-                leftScrollRef.current.scrollTop /
-                (leftScrollRef.current.scrollHeight - leftScrollRef.current.clientHeight || 1);
-            rightScrollRef.current.scrollTop =
-                percentage * (rightScrollRef.current.scrollHeight - rightScrollRef.current.clientHeight);
-            setTimeout(() => {
-                isSyncingScroll.current = false;
-            }, 50);
-        }
-    };
-
-    const handleRightScroll = () => {
-        if (isSyncingScroll.current) return;
-        if (leftScrollRef.current && rightScrollRef.current) {
-            isSyncingScroll.current = true;
-            const percentage =
-                rightScrollRef.current.scrollTop /
-                (rightScrollRef.current.scrollHeight - rightScrollRef.current.clientHeight || 1);
-            leftScrollRef.current.scrollTop =
-                percentage * (leftScrollRef.current.scrollHeight - leftScrollRef.current.clientHeight);
-            setTimeout(() => {
-                isSyncingScroll.current = false;
-            }, 50);
-        }
-    };
+    // Synchronized scrolling custom hook
+    const { leftScrollRef, rightScrollRef, handleLeftScroll, handleRightScroll } = useDualViewScroll();
 
     useEffect(() => {
         setDisplaySummary(summary);

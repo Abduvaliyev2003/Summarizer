@@ -202,4 +202,51 @@ class StripeSubscriptionService
             'subscription_ends_at' => now()->addMonths(),
         ]);
     }
+
+    /**
+     * Handle verified Stripe Webhook events.
+     */
+    public function handleWebhookEvent(\Stripe\Event $event): void
+    {
+        switch ($event->type) {
+            case 'checkout.session.completed':
+                /** @var \Stripe\Checkout\Session $session */
+                $session = $event->data->object;
+                $userId = $session->metadata->user_id ?? null;
+                if ($userId) {
+                    $user = User::find($userId);
+                    if ($user) {
+                        $this->handleSuccess($user, $session->id);
+                    }
+                }
+                break;
+
+            case 'customer.subscription.updated':
+                /** @var \Stripe\Subscription $subscription */
+                $subscription = $event->data->object;
+                $user = User::where('stripe_subscription_id', $subscription->id)
+                    ->orWhere('stripe_customer_id', $subscription->customer)
+                    ->first();
+                if ($user && $subscription->status === 'active') {
+                    $user->update([
+                        'subscription_ends_at' => Carbon::createFromTimestamp($subscription->current_period_end),
+                    ]);
+                }
+                break;
+
+            case 'customer.subscription.deleted':
+                /** @var \Stripe\Subscription $subscription */
+                $subscription = $event->data->object;
+                $user = User::where('stripe_subscription_id', $subscription->id)->first();
+                if ($user) {
+                    $freePlan = Plan::where('slug', 'free')->first();
+                    $user->update([
+                        'stripe_subscription_id' => null,
+                        'plan_id' => $freePlan?->id ?? $user->plan_id,
+                        'subscription_ends_at' => now(),
+                    ]);
+                }
+                break;
+        }
+    }
 }
