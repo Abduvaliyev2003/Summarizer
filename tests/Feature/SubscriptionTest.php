@@ -40,19 +40,20 @@ class SubscriptionTest extends TestCase
         $response->assertSessionHas('error');
     }
 
-    public function test_cancel_subscription_with_subscription_id_succeeds(): void
+    public function test_cancel_subscription_with_an_invalid_subscription_id_does_not_report_success(): void
     {
         $user = User::factory()->create(['stripe_subscription_id' => 'sub_mock123']);
 
         $response = $this->actingAs($user)->post('/subscription/cancel');
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('error');
     }
 
-    public function test_change_plan_updates_user_plan(): void
+    public function test_user_without_an_active_subscription_cannot_change_to_a_paid_plan(): void
     {
-        $user = User::factory()->create(['stripe_subscription_id' => 'sub_mock123']);
+        $currentPlan = Plan::factory()->create(['price' => 0]);
+        $user = User::factory()->create(['plan_id' => $currentPlan->id]);
         $newPlan = Plan::factory()->create(['slug' => 'enterprise-plan', 'is_active' => true]);
 
         $response = $this->actingAs($user)->post('/subscription/change-plan', [
@@ -60,7 +61,16 @@ class SubscriptionTest extends TestCase
         ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
-        $this->assertEquals($newPlan->id, $user->fresh()->plan_id);
+        $response->assertSessionHas('error');
+        $this->assertEquals($currentPlan->id, $user->fresh()->plan_id);
+    }
+
+    public function test_payment_intent_endpoint_is_not_exposed(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->postJson('/subscription/create-payment-intent', ['amount' => 1])
+            ->assertNotFound();
     }
 }

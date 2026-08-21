@@ -119,7 +119,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
     const usagePercent =
         isUnlimited || pdfLimit === 0 ? 0 : Math.min(100, Math.round((pdfCount / pdfLimit) * 100));
     const isNearLimit = usagePercent >= 80 && !isUnlimited;
-    const hasSubscription = Boolean(user.stripe_subscription_id);
+    const hasSubscription = ['active', 'trialing'].includes(user.stripe_subscription_status ?? '');
 
     const handleCancel = () => {
         if (!confirm('Are you sure you want to cancel your subscription?')) return;

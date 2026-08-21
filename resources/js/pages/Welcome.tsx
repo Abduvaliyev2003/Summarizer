@@ -32,7 +32,6 @@ import FlashMessage from '@/components/FlashMessage';
 import SummaryModal from '@/components/SummaryModal';
 import SummaryOptionsModal from '@/components/SummaryOptionsModal';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
-import { PricingToggle } from '@/components/ui/pricing-toggle';
 
 interface Plan {
     id: number;
@@ -86,7 +85,6 @@ export default function Welcome({
     userStats,
     flash,
 }: Props) {
-    const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
     const [pdf, setPdf] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -1256,10 +1254,6 @@ export default function Welcome({
                                         Start free and upgrade when you need more power.
                                     </p>
 
-                                    {/* Monthly / Yearly Toggle */}
-                                    <div className="mt-6 flex justify-center">
-                                        <PricingToggle onChange={setBillingPeriod} />
-                                    </div>
                                 </div>
 
                                 <div className="grid gap-6 lg:grid-cols-3">
@@ -1273,9 +1267,7 @@ export default function Welcome({
                                                 plan.slug ===
                                                 'standard';
 
-                                            const displayPrice = billingPeriod === 'yearly'
-                                                ? (Number(plan.price) * 0.83).toFixed(2)
-                                                : Number(plan.price).toFixed(2);
+                                            const displayPrice = Number(plan.price).toFixed(2);
 
                                             return (
                                                 <div

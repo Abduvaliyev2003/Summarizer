@@ -20,6 +20,8 @@ class User extends Authenticatable
         'pdf_count_reset_at',
         'stripe_customer_id',
         'stripe_subscription_id',
+        'stripe_subscription_status',
+        'subscription_cancel_at_period_end',
         'subscription_ends_at',
     ];
 
@@ -39,6 +41,7 @@ class User extends Authenticatable
             // IMPORTANT
             'pdf_count_reset_at' => 'datetime',
             'subscription_ends_at' => 'datetime',
+            'subscription_cancel_at_period_end' => 'boolean',
         ];
     }
 
@@ -88,6 +91,10 @@ class User extends Authenticatable
             return false;
         }
 
+        if ($this->plan->price > 0 && ! $this->hasActiveSubscription()) {
+            return false;
+        }
+
         if (
             $this->pdf_count_reset_at &&
             $this->pdf_count_reset_at->isPast()
@@ -116,7 +123,7 @@ class User extends Authenticatable
 
     public function hasActiveSubscription(): bool
     {
-        if (! $this->stripe_subscription_id) {
+        if (! $this->stripe_subscription_id || ! in_array($this->stripe_subscription_status, ['active', 'trialing'], true)) {
             return false;
         }
 

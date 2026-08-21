@@ -26,7 +26,9 @@ class AdminController extends Controller
 
         $stats = [
             'totalUsers' => User::count(),
-            'activeSubscriptions' => User::whereNotNull('stripe_subscription_id')->count(),
+            'activeSubscriptions' => User::whereNotNull('stripe_subscription_id')
+                ->whereIn('stripe_subscription_status', ['active', 'trialing'])
+                ->count(),
             'totalPdfsProcessed' => PdfSummary::count(),
         ];
 

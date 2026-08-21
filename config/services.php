@@ -31,6 +31,7 @@ return [
     'stripe' => [
         'key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_PUBLIC_KEY', env('STRIPE_KEY'))),
         'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
     'openrouter' => [
         'key' => env('OPENROUTER_API_KEY'),

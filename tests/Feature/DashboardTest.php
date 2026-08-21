@@ -43,11 +43,13 @@ class DashboardTest extends TestCase
         User::factory()->create([
             'plan_id' => $paidPlan->id,
             'stripe_subscription_id' => 'sub_current',
+            'stripe_subscription_status' => 'active',
             'subscription_ends_at' => now()->addMonth(),
         ]);
         User::factory()->create([
             'plan_id' => $paidPlan->id,
             'stripe_subscription_id' => 'sub_expired',
+            'stripe_subscription_status' => 'canceled',
             'subscription_ends_at' => now()->subSecond(),
         ]);
         User::factory()->create(['plan_id' => $paidPlan->id]);

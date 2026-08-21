@@ -1,6 +1,6 @@
 import { X, CheckCircle2, Copy, Download, FileText, Sparkles, Loader2, MessageSquare, Globe } from 'lucide-react';
 import { Link } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import StudySuiteViewer from '@/components/StudySuiteViewer';
 import PdfComparisonViewer from '@/components/PdfComparisonViewer';
 import PdfChatModal from '@/components/PdfChatModal';

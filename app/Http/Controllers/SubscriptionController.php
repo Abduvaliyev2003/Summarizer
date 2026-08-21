@@ -16,30 +16,6 @@ class SubscriptionController extends Controller
     public function __construct(protected StripeSubscriptionService $stripeService) {}
 
     /**
-     * Create a Stripe PaymentIntent for inline payment form.
-     */
-    public function createPaymentIntent(Request $request): JsonResponse
-    {
-        $request->validate([
-            'plan_slug' => ['required', 'string'],
-            'amount' => ['nullable', 'numeric'],
-        ]);
-
-        try {
-            $plan = Plan::where('slug', $request->plan_slug)->where('is_active', true)->firstOrFail();
-            $user = $request->user();
-
-            $result = $this->stripeService->createPaymentIntent($user, $plan, $request->input('amount'));
-
-            return response()->json($result);
-        } catch (\Exception $e) {
-            Log::error('createPaymentIntent error: '.$e->getMessage());
-
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-
-    /**
      * Create a Stripe Checkout Session for subscription purchase.
      */
     public function createCheckoutSession(Request $request, string $plan_slug): JsonResponse|SymfonyResponse|RedirectResponse
@@ -59,10 +35,10 @@ class SubscriptionController extends Controller
             Log::error('createCheckoutSession error: '.$e->getMessage());
 
             if ($request->wantsJson() || $request->ajax() || $request->expectsJson()) {
-                return response()->json(['error' => $e->getMessage()], 500);
+                return response()->json(['error' => 'Unable to start checkout. Please try again.'], 500);
             }
 
-            return redirect()->back()->with('error', $e->getMessage());
+            return redirect()->back()->with('error', 'Unable to start checkout. Please try again.');
         }
     }
 
@@ -110,7 +86,7 @@ class SubscriptionController extends Controller
         } catch (\Exception $e) {
             Log::error('Subscription cancel error: '.$e->getMessage());
 
-            return back()->with('error', $e->getMessage() ?: 'Something went wrong.');
+            return back()->with('error', 'Unable to cancel the subscription. Please try again.');
         }
     }
 
@@ -133,7 +109,7 @@ class SubscriptionController extends Controller
         } catch (\Exception $e) {
             Log::error('Subscription changePlan error: '.$e->getMessage());
 
-            return back()->with('error', $e->getMessage() ?: 'Something went wrong.');
+            return back()->with('error', 'Unable to change the subscription plan. Please try again.');
         }
     }
 }

@@ -21,6 +21,7 @@ class DashboardStatsService
                 ->withCount([
                     'users as active_subscribers_count' => function ($query) {
                         $query->whereNotNull('stripe_subscription_id')
+                            ->whereIn('stripe_subscription_status', ['active', 'trialing'])
                             ->where(function ($query) {
                                 $query->whereNull('subscription_ends_at')
                                     ->orWhere('subscription_ends_at', '>', now());
@@ -30,6 +31,7 @@ class DashboardStatsService
                 ->get();
             $totalUsers = User::count();
             $activeUsers = User::whereNotNull('stripe_subscription_id')
+                ->whereIn('stripe_subscription_status', ['active', 'trialing'])
                 ->where(function ($query) {
                     $query->whereNull('subscription_ends_at')
                         ->orWhere('subscription_ends_at', '>', now());

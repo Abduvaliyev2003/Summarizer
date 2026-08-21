@@ -57,6 +57,7 @@ export interface User {
     pdf_count?: number;
     plan_id?: number | null;
     stripe_subscription_id?: string | null;
+    stripe_subscription_status?: string | null;
     subscription_ends_at?: string | null;
     plan?: Plan | null;
     pdfSummaries_count?: number;

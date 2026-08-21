@@ -61,7 +61,6 @@ Route::middleware('auth')->group(function () {
 
     // Subscription management routes (rate limited to 20 requests per minute)
     Route::prefix('subscription')->middleware('throttle:20,1')->as('subscription.')->group(function () {
-        Route::post('/create-payment-intent', [SubscriptionController::class, 'createPaymentIntent'])->name('create-payment-intent');
         Route::post('/subscribe/{plan_slug}', [SubscriptionController::class, 'subscribe'])->name('subscribe');
         Route::post('/create-checkout-session/{plan_slug}', [SubscriptionController::class, 'createCheckoutSession'])->name('create-checkout-session');
         Route::get('/success', [SubscriptionController::class, 'success'])->name('success');
