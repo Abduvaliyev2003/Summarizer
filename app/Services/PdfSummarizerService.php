@@ -48,7 +48,16 @@ class PdfSummarizerService
         'tr' => 'Turkish (Türkçe)',
     ];
 
-    // ... (rest of methods)
+    /**
+     * Generate a summary from a PDF already stored on the application's disk.
+     *
+     * This is intentionally public for queued jobs. Upload-based entry points
+     * should continue to use the higher-level methods below.
+     */
+    public function summarizeStoredPdf(string $filePath, string $summaryType, string $targetLanguage): string
+    {
+        return $this->extractAndSummarizeText($filePath, $summaryType, $targetLanguage);
+    }
 
     /**
      * Parse text from PDF and request AI summary in the target language (with MD5 content caching).

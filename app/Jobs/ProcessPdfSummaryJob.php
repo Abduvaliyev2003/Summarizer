@@ -10,6 +10,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ProcessPdfSummaryJob implements ShouldQueue
@@ -50,7 +51,7 @@ class ProcessPdfSummaryJob implements ShouldQueue
 
         try {
             $fullPath = storage_path('app/'.$this->tempStoragePath);
-            $extractedSummary = $summarizerService->extractAndSummarizeText(
+            $extractedSummary = $summarizerService->summarizeStoredPdf(
                 $fullPath,
                 $this->summaryType,
                 $this->targetLanguage
@@ -62,6 +63,7 @@ class ProcessPdfSummaryJob implements ShouldQueue
             ]);
 
             DashboardStatsService::clearDashboardCache($summary->user_id);
+            Storage::delete($this->tempStoragePath);
         } catch (Throwable $e) {
             Log::error('ProcessPdfSummaryJob error', ['summary_id' => $this->pdfSummaryId, 'error' => $e->getMessage()]);
 
@@ -72,5 +74,23 @@ class ProcessPdfSummaryJob implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Clean up the queued upload after Laravel exhausts all retry attempts.
+     */
+    public function failed(Throwable $exception): void
+    {
+        $summary = PdfSummary::find($this->pdfSummaryId);
+        if ($summary) {
+            $summary->update([
+                'status' => 'failed',
+                'error_message' => $exception->getMessage(),
+            ]);
+
+            DashboardStatsService::clearDashboardCache($summary->user_id);
+        }
+
+        Storage::delete($this->tempStoragePath);
     }
 }

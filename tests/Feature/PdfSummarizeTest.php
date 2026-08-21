@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessPdfSummaryJob;
+use App\Models\PdfSummary;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\PdfSummarizerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Mockery;
 use Tests\TestCase;
 
 class PdfSummarizeTest extends TestCase
@@ -152,6 +156,62 @@ class PdfSummarizeTest extends TestCase
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $response->assertHeader('X-XSS-Protection', '1; mode=block');
+    }
+
+    public function test_user_cannot_view_another_users_summary_processing_status(): void
+    {
+        $owner = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $summary = PdfSummary::factory()->create([
+            'user_id' => $owner->id,
+            'summary' => 'Private document summary',
+        ]);
+
+        $this->actingAs($otherUser)
+            ->getJson(route('pdf.status', $summary))
+            ->assertForbidden();
+    }
+
+    public function test_user_can_view_their_own_summary_processing_status(): void
+    {
+        $owner = User::factory()->create();
+        $summary = PdfSummary::factory()->create([
+            'user_id' => $owner->id,
+            'status' => 'completed',
+            'summary' => 'My document summary',
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson(route('pdf.status', $summary))
+            ->assertOk()
+            ->assertJson([
+                'id' => $summary->id,
+                'status' => 'completed',
+                'summary' => 'My document summary',
+            ]);
+    }
+
+    public function test_queued_summary_job_uses_the_public_stored_pdf_service_entry_point(): void
+    {
+        $summary = PdfSummary::factory()->create([
+            'status' => 'pending',
+            'summary' => '',
+        ]);
+        $job = new ProcessPdfSummaryJob($summary->id, 'pdfs/queued-upload.pdf');
+        $summarizer = Mockery::mock(PdfSummarizerService::class);
+
+        $summarizer->shouldReceive('summarizeStoredPdf')
+            ->once()
+            ->with(storage_path('app/pdfs/queued-upload.pdf'), 'default', 'en')
+            ->andReturn('Completed queued summary');
+
+        $job->handle($summarizer);
+
+        $this->assertDatabaseHas('pdf_summaries', [
+            'id' => $summary->id,
+            'status' => 'completed',
+            'summary' => 'Completed queued summary',
+        ]);
     }
 
     public function test_user_can_compare_multiple_pdfs(): void

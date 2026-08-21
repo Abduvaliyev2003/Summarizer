@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\DashboardStatsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -30,5 +32,31 @@ class DashboardTest extends TestCase
         $admin = User::factory()->create(['plan_id' => $plan->id, 'role' => 'admin']);
 
         $this->actingAs($admin)->get('/dashboard')->assertOk();
+    }
+
+    public function test_admin_dashboard_counts_only_current_paid_subscriptions_for_revenue(): void
+    {
+        $freePlan = Plan::factory()->create(['price' => 0]);
+        $paidPlan = Plan::factory()->create(['price' => 24.99]);
+
+        User::factory()->create(['plan_id' => $freePlan->id]);
+        User::factory()->create([
+            'plan_id' => $paidPlan->id,
+            'stripe_subscription_id' => 'sub_current',
+            'subscription_ends_at' => now()->addMonth(),
+        ]);
+        User::factory()->create([
+            'plan_id' => $paidPlan->id,
+            'stripe_subscription_id' => 'sub_expired',
+            'subscription_ends_at' => now()->subSecond(),
+        ]);
+        User::factory()->create(['plan_id' => $paidPlan->id]);
+
+        Cache::forget('admin_dashboard_stats');
+        $stats = app(DashboardStatsService::class)->getAdminDashboardData()['adminStats'];
+
+        $this->assertSame(1, $stats['activeUsers']);
+        $this->assertEquals(24.99, $stats['monthlyRevenue']);
+        $this->assertSame(1, $stats['plans']->firstWhere('id', $paidPlan->id)->active_subscribers_count);
     }
 }

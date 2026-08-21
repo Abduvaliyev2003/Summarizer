@@ -17,13 +17,28 @@ class DashboardStatsService
     public function getAdminDashboardData(): array
     {
         return Cache::remember('admin_dashboard_stats', 300, function () {
-            $plans = Plan::withCount('users')->get();
+            $plans = Plan::withCount('users')
+                ->withCount([
+                    'users as active_subscribers_count' => function ($query) {
+                        $query->whereNotNull('stripe_subscription_id')
+                            ->where(function ($query) {
+                                $query->whereNull('subscription_ends_at')
+                                    ->orWhere('subscription_ends_at', '>', now());
+                            });
+                    },
+                ])
+                ->get();
             $totalUsers = User::count();
-            $activeUsers = User::whereNotNull('stripe_subscription_id')->count();
+            $activeUsers = User::whereNotNull('stripe_subscription_id')
+                ->where(function ($query) {
+                    $query->whereNull('subscription_ends_at')
+                        ->orWhere('subscription_ends_at', '>', now());
+                })
+                ->count();
             $totalPdfs = PdfSummary::count();
 
             $monthlyRevenue = $plans->reduce(function ($sum, $plan) {
-                return $sum + ($plan->price * $plan->users_count);
+                return $sum + ($plan->price * $plan->active_subscribers_count);
             }, 0);
 
             $now = now();

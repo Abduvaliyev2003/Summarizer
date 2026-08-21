@@ -42,6 +42,7 @@ export interface Plan {
     features?: string[] | string;
     is_active?: boolean;
     users_count?: number;
+    active_subscribers_count?: number;
 }
 
 export interface User {

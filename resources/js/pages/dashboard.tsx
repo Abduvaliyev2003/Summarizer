@@ -101,7 +101,7 @@ export default function Dashboard({ user, userStats, dailyTrend, recentSummaries
 
     const calculatedRevenue =
         adminStats?.monthlyRevenue ??
-        (adminStats?.plans?.reduce((sum, plan) => sum + plan.price * (plan.users_count ?? 0), 0) ?? 0);
+        (adminStats?.plans?.reduce((sum, plan) => sum + plan.price * (plan.active_subscribers_count ?? 0), 0) ?? 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -182,21 +182,20 @@ export default function Dashboard({ user, userStats, dailyTrend, recentSummaries
                                         Subscription Plans
                                     </h2>
                                     <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-                                        {adminStats?.plans?.length ?? 0} Active Plans
+                                        {adminStats?.plans?.length ?? 0} Plans
                                     </span>
                                 </div>
 
                                 {!adminStats?.plans || adminStats.plans.length === 0 ? (
                                     <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
-                                        No active plans available.
+                                        No plans available.
                                     </p>
                                 ) : (
                                     <div className="mt-6 space-y-5">
                                         {adminStats.plans.map((plan) => {
-                                            const totalUsers = adminStats.totalUsers || 1;
-                                            const usersCount = plan.users_count ?? 0;
-                                            const share = Math.round((usersCount / totalUsers) * 100);
-                                            const planRevenue = plan.price * usersCount;
+                                            const activeSubscribers = plan.active_subscribers_count ?? 0;
+                                            const share = Math.round((activeSubscribers / (adminStats.activeUsers || 1)) * 100);
+                                            const planRevenue = plan.price * activeSubscribers;
 
                                             return (
                                                 <div
@@ -217,7 +216,7 @@ export default function Dashboard({ user, userStats, dailyTrend, recentSummaries
                                                                 {formatPrice(planRevenue)}
                                                             </p>
                                                             <p className="text-[11px] font-semibold text-slate-500">
-                                                                {usersCount} users ({share}%)
+                                                                {activeSubscribers} active ({share}%)
                                                             </p>
                                                         </div>
                                                     </div>

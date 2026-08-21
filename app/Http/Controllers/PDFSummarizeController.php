@@ -10,8 +10,10 @@ use App\Http\Requests\ChatWithPdfRequest;
 use App\Http\Requests\ComparePDFsRequest;
 use App\Http\Requests\RewriteSummaryRequest;
 use App\Http\Requests\SummarizePDFRequest;
+use App\Models\PdfSummary;
 use App\Services\PdfSummarizerService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -112,8 +114,10 @@ class PDFSummarizeController extends Controller
     /**
      * Get processing status of an asynchronous PDF summary task.
      */
-    public function status(\App\Models\PdfSummary $summary): JsonResponse
+    public function status(Request $request, PdfSummary $summary): JsonResponse
     {
+        abort_unless($summary->user_id === $request->user()->id, 403);
+
         return response()->json([
             'id' => $summary->id,
             'status' => $summary->status,
