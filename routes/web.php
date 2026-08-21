@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentCollectionController;
 use App\Http\Controllers\PDFSummarizeController;
 use App\Http\Controllers\PdfSummaryController;
 use App\Http\Controllers\ShareController;
@@ -33,6 +34,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/billing', BillingController::class)->name('billing');
     Route::get('/history', [PdfSummaryController::class, 'index'])->name('history');
+    Route::get('/workspaces', [DocumentCollectionController::class, 'index'])->name('workspaces.index');
+    Route::post('/workspaces', [DocumentCollectionController::class, 'store'])->name('workspaces.store');
+    Route::post('/workspaces/summaries/{summary}', [DocumentCollectionController::class, 'assign'])->name('workspaces.assign');
+    Route::post('/workspaces/{collection}/chat', [DocumentCollectionController::class, 'chat'])->middleware('throttle:15,1')->name('workspaces.chat');
     Route::post('/history/{summary}/share', [ShareController::class, 'toggle'])->name('share.toggle');
 
     // PDF Summarization endpoint (rate limited to 10 requests per minute)

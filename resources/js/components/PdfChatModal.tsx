@@ -1,4 +1,5 @@
 import { Bot, Check, Copy, Loader2, MessageSquare, Send, Sparkles, User, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 
 interface Message {
@@ -6,11 +7,19 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp: string;
+    citations?: Citation[];
+}
+
+interface Citation {
+    page: number | null;
+    excerpt: string;
 }
 
 interface PdfChatModalProps {
     show: boolean;
     summary: string;
+    summaryId?: number | null;
+    endpoint?: string;
     filename: string;
     onClose: () => void;
 }
@@ -33,11 +42,12 @@ function TypingIndicator() {
     );
 }
 
-export default function PdfChatModal({ show, summary, filename, onClose }: PdfChatModalProps) {
+export default function PdfChatModal({ show, summary, summaryId, endpoint = '/pdf/chat', filename, onClose }: PdfChatModalProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -93,10 +103,10 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
                 .filter((m) => m.id !== 'welcome')
                 .map((m) => ({ role: m.role, content: m.content }));
 
-            const response = await fetch('/pdf/chat', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, Accept: 'application/json' },
-                body: JSON.stringify({ question: questionText, context_summary: summary, history: historyPayload }),
+                body: JSON.stringify({ question: questionText, context_summary: summary, summary_id: summaryId, history: historyPayload }),
             });
 
             const data = await response.json();
@@ -107,6 +117,7 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
                     role: 'assistant',
                     content: data.answer,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    citations: data.citations ?? [],
                 }]);
             } else {
                 throw new Error(data.message || 'Failed to get response.');
@@ -138,9 +149,9 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-md">
-            <div className="flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6" role="presentation" onMouseDown={onClose}>
+            <div className="flex h-[min(720px,calc(100dvh-1.5rem))] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-[min(720px,calc(100dvh-3rem))] sm:rounded-3xl" role="dialog" aria-modal="true" aria-label="Chat with PDF" onMouseDown={(event) => event.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/60">
@@ -197,6 +208,16 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
                                         </button>
                                     )}
                                 </div>
+                                {msg.role === 'assistant' && (msg.citations?.length ?? 0) > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 px-1 pt-1">
+                                        {msg.citations!.map((citation, index) => (
+                                            <button key={index} type="button" onClick={() => setSelectedCitation(citation)}
+                                                className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-300">
+                                                Source{citation.page ? ` · page ${citation.page}` : ''}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -215,6 +236,16 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
 
                     <div ref={messagesEndRef} />
                 </div>
+
+                {selectedCitation && (
+                    <div className="mx-4 mb-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-slate-700 dark:border-violet-500/30 dark:bg-violet-950/30 dark:text-slate-200 sm:mx-6">
+                        <div className="mb-1 flex items-center justify-between gap-3 font-bold text-violet-700 dark:text-violet-300">
+                            <span>Source excerpt{selectedCitation.page ? ` · Page ${selectedCitation.page}` : ''}</span>
+                            <button type="button" onClick={() => setSelectedCitation(null)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white" aria-label="Close source excerpt"><X className="h-3.5 w-3.5" /></button>
+                        </div>
+                        <mark className="bg-violet-200/70 text-inherit dark:bg-violet-500/30">{selectedCitation.excerpt}</mark>
+                    </div>
+                )}
 
                 {/* Suggested questions (shown early in conversation) */}
                 {messages.length <= 2 && !loading && (
@@ -257,6 +288,7 @@ export default function PdfChatModal({ show, summary, filename, onClose }: PdfCh
                     </button>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

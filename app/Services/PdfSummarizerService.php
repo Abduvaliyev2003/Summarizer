@@ -165,11 +165,14 @@ class PdfSummarizerService
         try {
             $fullPath = Storage::path($path);
             $summaryText = $this->extractAndSummarizeText($fullPath, $summaryType, $targetLanguage);
+            $sourceContext = $this->extractSourceContext($fullPath);
 
             $pdfSummary = PdfSummary::create([
                 'user_id' => $user->id,
                 'filename' => $originalName,
                 'summary' => $summaryText,
+                'source_text' => $sourceContext['text'],
+                'source_pages' => $sourceContext['pages'],
                 'target_language' => $targetLanguage,
                 'file_size' => $fileSize,
             ]);
@@ -235,11 +238,14 @@ class PdfSummarizerService
 
             try {
                 $summaryText = $this->extractAndSummarizeText($fullPath, $summaryType, $targetLanguage);
+                $sourceContext = $this->extractSourceContext($fullPath);
 
                 $pdfSummary = PdfSummary::create([
                     'user_id' => $user->id,
                     'filename' => $originalName,
                     'summary' => $summaryText,
+                    'source_text' => $sourceContext['text'],
+                    'source_pages' => $sourceContext['pages'],
                     'target_language' => $targetLanguage,
                     'source_url' => $url,
                     'file_size' => $fileSize,
@@ -551,6 +557,97 @@ class PdfSummarizerService
 
         // Algorithmic fallback response
         return $this->fallbackChatResponse($question, $contextSummary);
+    }
+
+    /**
+     * Answer a question using the stored PDF extraction and return verifiable source excerpts.
+     *
+     * @return array{answer: string, citations: array<int, array{page: int|null, excerpt: string}>}
+     */
+    public function chatWithCitations(ChatWithPdfDTO $dto, ?PdfSummary $pdfSummary = null): array
+    {
+        $sourceText = $pdfSummary?->source_text ?: $dto->contextSummary;
+        $answer = $this->chatWithPdf($dto->question, $sourceText, $dto->history);
+        $pages = $pdfSummary?->source_pages ?? [];
+
+        return [
+            'answer' => $answer,
+            'citations' => $this->findRelevantCitations($dto->question, $sourceText, $pages),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{page?: int, text?: string}>  $pages
+     * @return array<int, array{page: int|null, excerpt: string}>
+     */
+    protected function findRelevantCitations(string $question, string $sourceText, array $pages): array
+    {
+        $keywords = array_filter(preg_split('/[^\\pL\\pN]+/u', mb_strtolower($question)) ?: [], fn (string $word) => mb_strlen($word) > 3);
+        $candidates = $pages ?: [['page' => null, 'text' => $sourceText]];
+        $ranked = [];
+
+        foreach ($candidates as $candidate) {
+            $text = trim((string) ($candidate['text'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+
+            $score = 0;
+            foreach ($keywords as $word) {
+                $score += substr_count(mb_strtolower($text), $word);
+            }
+            $ranked[] = ['page' => isset($candidate['page']) ? (int) $candidate['page'] : null, 'text' => $text, 'score' => $score];
+        }
+
+        usort($ranked, fn (array $a, array $b) => $b['score'] <=> $a['score']);
+
+        return array_map(fn (array $item) => [
+            'page' => $item['page'],
+            'excerpt' => Str::limit(preg_replace('/\\s+/u', ' ', $item['text']) ?: $item['text'], 360, '…'),
+        ], array_slice($ranked, 0, min(2, count($ranked))));
+    }
+
+    /**
+     * Preserve a bounded page-by-page extraction so Q&A can cite the original document.
+     *
+     * @return array{text: string, pages: array<int, array{page: int, text: string}>}
+     */
+    protected function extractSourceContext(string $filePath): array
+    {
+        $pages = [];
+
+        try {
+            $pdf = (new Parser)->parseFile($filePath);
+            foreach ($pdf->getPages() as $index => $page) {
+                $text = trim($page->getText());
+                if ($text !== '') {
+                    $pages[] = ['page' => $index + 1, 'text' => mb_substr($text, 0, 6000)];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Unable to extract page-level PDF context: '.$e->getMessage());
+        }
+
+        if ($pages === []) {
+            $text = trim($this->extractTextFromPdf($filePath));
+            $pages = $text === '' ? [] : [['page' => 1, 'text' => mb_substr($text, 0, 6000)]];
+        }
+
+        $keptPages = [];
+        $remaining = 50000;
+        foreach ($pages as $page) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $text = mb_substr($page['text'], 0, $remaining);
+            $keptPages[] = ['page' => $page['page'], 'text' => $text];
+            $remaining -= mb_strlen($text);
+        }
+
+        return [
+            'text' => implode("\n\n", array_map(fn (array $page) => "[Page {$page['page']}]\n{$page['text']}", $keptPages)),
+            'pages' => $keptPages,
+        ];
     }
 
     /**

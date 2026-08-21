@@ -275,6 +275,7 @@ function SummaryCard({ summary }: { summary: PdfSummary }) {
             <PdfChatModal
                 show={showChat}
                 summary={summary.summary}
+                summaryId={summary.id}
                 filename={summary.filename}
                 onClose={() => setShowChat(false)}
             />

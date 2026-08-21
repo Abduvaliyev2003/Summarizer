@@ -101,10 +101,14 @@ class PDFSummarizeController extends Controller
         $dto = ChatWithPdfDTO::fromRequest($request);
 
         try {
-            $answer = $summarizerService->chatWithPdf($dto);
+            $pdfSummary = $dto->summaryId
+                ? $request->user()->pdfSummaries()->findOrFail($dto->summaryId)
+                : null;
+            $result = $summarizerService->chatWithCitations($dto, $pdfSummary);
 
             return response()->json([
-                'answer' => $answer,
+                'answer' => $result['answer'],
+                'citations' => $result['citations'],
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to process chat question: '.$e->getMessage()], 500);

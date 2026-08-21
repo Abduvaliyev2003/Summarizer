@@ -12,6 +12,7 @@ import jsPDF from 'jspdf';
 interface SummaryModalProps {
     show: boolean;
     summary: string;
+    summaryId?: number | null;
     filename: string;
     onClose: () => void;
     onNewUpload: () => void;
@@ -30,6 +31,7 @@ const DUAL_LANGUAGES = [
 export default function SummaryModal({
     show,
     summary,
+    summaryId,
     filename,
     onClose,
     onNewUpload,
@@ -562,6 +564,7 @@ export default function SummaryModal({
             <PdfChatModal
                 show={showChat}
                 summary={displaySummary}
+                summaryId={summaryId}
                 filename={filename}
                 onClose={() => setShowChat(false)}
             />

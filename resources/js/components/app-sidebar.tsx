@@ -1,4 +1,3 @@
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -20,9 +19,9 @@ import {
     Check,
     CreditCard,
     FileText,
-    Folder,
     History,
     LayoutGrid,
+    FolderOpen,
     Loader2,
     Sparkles,
     Users,
@@ -56,6 +55,11 @@ export function AppSidebar() {
             icon: History,
         },
         {
+            title: 'Workspaces',
+            url: '/workspaces',
+            icon: FolderOpen,
+        },
+        {
             title: 'Billing',
             url: '/billing',
             icon: CreditCard,
@@ -77,14 +81,6 @@ export function AppSidebar() {
     ];
 
     const mainNavItems = isAdmin ? adminNavItems : userNavItems;
-
-    const footerNavItems: NavItem[] = [
-        {
-            title: 'Repository',
-            url: 'https://github.com/summarizer-ai/summarizer',
-            icon: Folder,
-        },
-    ];
 
     const pdfCount = user?.pdf_count ?? 0;
     const pdfLimit = user?.plan?.pdf_limit ?? 0;
@@ -215,7 +211,6 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

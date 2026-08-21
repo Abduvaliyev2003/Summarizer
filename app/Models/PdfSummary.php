@@ -13,8 +13,11 @@ class PdfSummary extends Model
 
     protected $fillable = [
         'user_id',
+        'collection_id',
         'filename',
         'summary',
+        'source_text',
+        'source_pages',
         'target_language',
         'source_url',
         'file_size',
@@ -24,8 +27,20 @@ class PdfSummary extends Model
         'error_message',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'source_pages' => 'array',
+        ];
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function collection()
+    {
+        return $this->belongsTo(DocumentCollection::class, 'collection_id');
     }
 }

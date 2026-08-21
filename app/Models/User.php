@@ -72,6 +72,11 @@ class User extends Authenticatable
         return $this->hasMany(PdfSummary::class);
     }
 
+    public function documentCollections()
+    {
+        return $this->hasMany(DocumentCollection::class);
+    }
+
     public function canSummarizePdf(): bool
     {
         if (! $this->plan_id) {

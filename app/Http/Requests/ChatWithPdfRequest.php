@@ -25,6 +25,7 @@ class ChatWithPdfRequest extends FormRequest
         return [
             'question' => ['required', 'string', 'max:1000'],
             'context_summary' => ['required', 'string'],
+            'summary_id' => ['nullable', 'integer'],
             'history' => ['nullable', 'array'],
             'history.*.role' => ['required_with:history', 'string', 'in:user,assistant'],
             'history.*.content' => ['required_with:history', 'string'],

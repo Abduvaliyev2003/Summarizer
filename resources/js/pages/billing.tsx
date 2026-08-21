@@ -1,15 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
-import {
-    ArrowUpRight,
-    CheckCircle2,
-    CreditCard,
-    FileText,
-    Sparkles,
-    TrendingUp,
-    Zap,
-} from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowUpRight, CheckCircle2, CreditCard, FileText, Sparkles, TrendingUp, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -36,6 +28,7 @@ interface User {
     email: string;
     role: string;
     stripe_subscription_id?: string | null;
+    stripe_subscription_status?: string | null;
     subscription_ends_at?: string | null;
     plan?: {
         id: number;
@@ -81,9 +74,13 @@ function MiniRing({ percent, isNearLimit, isUnlimited }: { percent: number; isNe
                 </defs>
                 <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={sw} className="stroke-violet-100 dark:stroke-white/10" />
                 <circle
-                    cx={size / 2} cy={size / 2} r={r} fill="none"
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={r}
+                    fill="none"
                     stroke={isUnlimited ? 'url(#miniGradG)' : isNearLimit ? 'url(#miniGradA)' : 'url(#miniGradV)'}
-                    strokeWidth={sw} strokeLinecap="round"
+                    strokeWidth={sw}
+                    strokeLinecap="round"
                     strokeDasharray={circ}
                     strokeDashoffset={isUnlimited ? 0 : offset}
                     style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
@@ -116,8 +113,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
     const totalSummaries = userStats?.totalSummaries ?? 0;
 
     const isUnlimited = pdfLimit < 0;
-    const usagePercent =
-        isUnlimited || pdfLimit === 0 ? 0 : Math.min(100, Math.round((pdfCount / pdfLimit) * 100));
+    const usagePercent = isUnlimited || pdfLimit === 0 ? 0 : Math.min(100, Math.round((pdfCount / pdfLimit) * 100));
     const isNearLimit = usagePercent >= 80 && !isUnlimited;
     const hasSubscription = ['active', 'trialing'].includes(user.stripe_subscription_status ?? '');
 
@@ -141,7 +137,10 @@ export default function Billing({ auth, userStats, flash }: Props) {
             <div className="flex h-full flex-1 flex-col gap-8 overflow-x-auto p-6">
                 {/* Flash */}
                 {flash?.success && (
-                    <div role="alert" className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm backdrop-blur-xl dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <div
+                        role="alert"
+                        className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm backdrop-blur-xl dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                    >
                         <CheckCircle2 className="h-4 w-4 flex-none" aria-hidden="true" />
                         {flash.success}
                     </div>
@@ -149,36 +148,41 @@ export default function Billing({ auth, userStats, flash }: Props) {
 
                 {/* Header */}
                 <div>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        Billing & Subscription
-                    </h1>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        Manage your plan, usage, and payment details.
-                    </p>
+                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Billing & Subscription</h1>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your plan, usage, and payment details.</p>
                 </div>
 
                 {/* Usage + Plan hero */}
-                <div className={`relative overflow-hidden rounded-3xl border p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 ${
-                    isNearLimit
-                        ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
-                        : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
-                }`}>
+                <div
+                    className={`relative overflow-hidden rounded-3xl border p-8 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 ${
+                        isNearLimit
+                            ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
+                            : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
+                    }`}
+                >
                     {/* glow */}
-                    <div className="pointer-events-none absolute -top-10 -right-10 h-40 w-40 rounded-full bg-gradient-to-br from-violet-400/20 to-transparent blur-2xl dark:from-violet-600/10" aria-hidden="true" />
+                    <div
+                        className="pointer-events-none absolute -top-10 -right-10 h-40 w-40 rounded-full bg-gradient-to-br from-violet-400/20 to-transparent blur-2xl dark:from-violet-600/10"
+                        aria-hidden="true"
+                    />
 
                     <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-5">
                             <MiniRing percent={isUnlimited ? 100 : usagePercent} isNearLimit={isNearLimit} isUnlimited={isUnlimited} />
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                    Monthly usage
-                                </p>
+                                <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase dark:text-slate-500">Monthly usage</p>
                                 <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
                                     {isUnlimited ? (
                                         <span className="text-emerald-500">Unlimited</span>
                                     ) : (
                                         <>
-                                            <span className={isNearLimit ? 'text-amber-500' : 'bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent'}>
+                                            <span
+                                                className={
+                                                    isNearLimit
+                                                        ? 'text-amber-500'
+                                                        : 'bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent'
+                                                }
+                                            >
                                                 {pdfCount}
                                             </span>
                                             <span className="text-lg font-semibold text-slate-400"> / {pdfLimit}</span>
@@ -201,7 +205,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
                             {!hasSubscription && (
                                 <Link
                                     href="/checkout/pro"
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition-all duration-300 hover:scale-[1.03] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none"
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition-all duration-300 outline-none hover:scale-[1.03] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
                                 >
                                     <Zap className="h-4 w-4" aria-hidden="true" />
                                     Upgrade plan
@@ -223,9 +227,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
                         <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Current plan</p>
                         {user.plan?.price !== undefined && (
                             <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                                {user.plan.price === 0
-                                    ? 'Free — no charge'
-                                    : `$${user.plan.price}/month`}
+                                {user.plan.price === 0 ? 'Free — no charge' : `$${user.plan.price}/month`}
                             </p>
                         )}
                     </div>
@@ -241,12 +243,16 @@ export default function Billing({ auth, userStats, flash }: Props) {
                     </div>
 
                     {/* Remaining */}
-                    <div className={`rounded-3xl border p-6 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-violet-900/10 ${
-                        isNearLimit
-                            ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
-                            : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
-                    }`}>
-                        <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isNearLimit ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                    <div
+                        className={`rounded-3xl border p-6 shadow-xl shadow-violet-900/5 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-violet-900/10 ${
+                            isNearLimit
+                                ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5'
+                                : 'border-violet-100 bg-white/80 dark:border-white/10 dark:bg-white/5'
+                        }`}
+                    >
+                        <span
+                            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isNearLimit ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}
+                        >
                             <TrendingUp className="h-5 w-5" aria-hidden="true" />
                         </span>
                         <p className="mt-4 text-2xl font-extrabold text-slate-900 dark:text-white">
@@ -279,7 +285,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
                         <div className="mt-6 flex flex-wrap gap-3">
                             <Link
                                 href="/checkout/pro"
-                                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none"
+                                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition-all duration-300 outline-none hover:scale-[1.02] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
                             >
                                 Change plan
                                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
@@ -288,7 +294,7 @@ export default function Billing({ auth, userStats, flash }: Props) {
                                 type="button"
                                 disabled={cancelling}
                                 onClick={handleCancel}
-                                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/70 px-5 py-2.5 text-sm font-semibold text-rose-600 outline-none transition-all duration-300 hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-500/20 dark:bg-white/5 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/70 px-5 py-2.5 text-sm font-semibold text-rose-600 transition-all duration-300 outline-none hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-500/20 dark:bg-white/5 dark:text-rose-400 dark:hover:bg-rose-500/10"
                             >
                                 {cancelling ? 'Cancelling…' : 'Cancel subscription'}
                             </button>
@@ -302,16 +308,13 @@ export default function Billing({ auth, userStats, flash }: Props) {
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 shadow-lg shadow-violet-600/25">
                             <Zap className="h-6 w-6 text-white" aria-hidden="true" />
                         </div>
-                        <h2 className="mt-4 text-xl font-extrabold text-slate-900 dark:text-white">
-                            Unlock more power
-                        </h2>
+                        <h2 className="mt-4 text-xl font-extrabold text-slate-900 dark:text-white">Unlock more power</h2>
                         <p className="mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                            Upgrade to a paid plan to increase your monthly PDF limit, get priority processing, and
-                            access advanced summary options.
+                            Upgrade to a paid plan to increase your monthly PDF limit, get priority processing, and access advanced summary options.
                         </p>
                         <Link
                             href="/checkout/pro"
-                            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition-all duration-300 hover:scale-[1.03] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none"
+                            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition-all duration-300 outline-none hover:scale-[1.03] hover:shadow-violet-600/40 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
                         >
                             <Sparkles className="h-4 w-4" aria-hidden="true" />
                             View plans & upgrade

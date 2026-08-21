@@ -13,14 +13,16 @@ readonly class ChatWithPdfDTO
         public string $question,
         public string $contextSummary,
         public array $history,
+        public ?int $summaryId,
     ) {}
 
     public static function fromRequest(ChatWithPdfRequest $request): self
     {
         return new self(
             question: $request->input('question'),
-            contextSummary: $request->input('context_summary'),
+            contextSummary: $request->input('context_summary', '') ?? '',
             history: $request->input('history', []),
+            summaryId: $request->integer('summary_id') ?: null,
         );
     }
 }

@@ -93,6 +93,7 @@ export default function Welcome({
     const [progress, setProgress] = useState(0);
 
     const [summary, setSummary] = useState('');
+    const [summaryId, setSummaryId] = useState<number | null>(null);
     const [showSummary, setShowSummary] = useState(false);
 
     const [showSummaryOptionsModal, setShowSummaryOptionsModal] =
@@ -303,6 +304,7 @@ export default function Welcome({
         setLoading(true);
         setProgress(15);
         setSummary('');
+        setSummaryId(null);
         setShowSummary(false);
 
         const formData = new FormData();
@@ -338,6 +340,7 @@ export default function Welcome({
 
             setTimeout(() => {
                 setSummary(data.summary);
+                setSummaryId(data.id ?? null);
                 setSelectedFile(new File([], `Comparison (${compareFiles.length} docs)`));
                 setShowSummary(true);
                 setLoading(false);
@@ -466,6 +469,7 @@ export default function Welcome({
                 .trim();
 
             setSummary(cleanSummary);
+            setSummaryId(data.id ?? null);
 
             window.setTimeout(() => {
                 setLoading(false);
@@ -502,6 +506,7 @@ export default function Welcome({
         setPdf(null);
         setSelectedFile(null);
         setSummary('');
+        setSummaryId(null);
 
         setProgress(0);
         setLoading(false);
@@ -755,6 +760,7 @@ export default function Welcome({
                         !!summary
                     }
                     summary={summary}
+                    summaryId={summaryId}
                     filename={
                         selectedFile?.name ||
                         pdf?.name ||
